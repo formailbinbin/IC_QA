@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数字芯片时序笔记 · SDF / Setup / Hold / 门级仿真</title>
+<style>
+  :root{
+    --bg:#0f1115;
+    --bg2:#161a21;
+    --bg3:#1c212b;
+    --line:#2a313d;
+    --fg:#d8dee9;
+    --fg-dim:#8b97a8;
+    --accent:#5aa9e6;
+    --accent2:#7ee787;
+    --warn:#f0a35e;
+    --danger:#f07178;
+    --purple:#c39bd3;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--fg);
+    font-family:"Segoe UI","Microsoft YaHei",-apple-system,sans-serif;
+    font-size:15px;
+    line-height:1.75;
+  }
+
+  /* ---------- 顶部导航 ---------- */
+  header{
+    position:sticky;top:0;z-index:100;
+    background:rgba(15,17,21,.95);
+    backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);
+  }
+  .title-bar{
+    max-width:1180px;margin:0 auto;padding:14px 24px 6px;
+    display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  }
+  .title-bar h1{
+    margin:0;font-size:19px;font-weight:600;letter-spacing:.5px;
+  }
+  .title-bar .sub{color:var(--fg-dim);font-size:12.5px;}
+  nav.tabs{
+    max-width:1180px;margin:0 auto;padding:0 24px;
+    display:flex;gap:4px;overflow-x:auto;
+  }
+  nav.tabs button{
+    background:none;border:none;border-bottom:2px solid transparent;
+    color:var(--fg-dim);font:inherit;font-size:14px;
+    padding:10px 16px;cursor:pointer;white-space:nowrap;
+    transition:all .15s;
+  }
+  nav.tabs button:hover{color:var(--fg);background:var(--bg2);}
+  nav.tabs button.active{
+    color:var(--accent);border-bottom-color:var(--accent);font-weight:600;
+  }
+
+  /* ---------- 内容区 ---------- */
+  main{max-width:1180px;margin:0 auto;padding:28px 24px 100px;}
+  section.panel{display:none;animation:fade .2s ease;}
+  section.panel.active{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+  h2{
+    font-size:21px;margin:0 0 20px;padding-bottom:10px;
+    border-bottom:1px solid var(--line);font-weight:600;
+  }
+  h3{
+    font-size:16.5px;margin:32px 0 12px;color:var(--accent);font-weight:600;
+  }
+  h3:first-of-type{margin-top:8px;}
+  h4{font-size:14.5px;margin:20px 0 8px;color:var(--purple);font-weight:600;}
+  p{margin:10px 0;}
+  ul,ol{margin:10px 0;padding-left:24px;}
+  li{margin:6px 0;}
+  strong{color:#fff;font-weight:600;}
+  code{
+    background:var(--bg3);padding:1.5px 6px;border-radius:3px;
+    font-family:Consolas,"Courier New",monospace;font-size:13px;
+    color:var(--accent2);
+  }
+
+  pre{
+    background:var(--bg2);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:4px;padding:14px 16px;overflow-x:auto;
+    font-family:Consolas,"Courier New",monospace;
+    font-size:12.5px;line-height:1.5;color:#c9d1d9;
+    margin:14px 0;
+  }
+  pre.wave{border-left-color:var(--warn);font-size:12px;line-height:1.45;}
+  pre.formula{
+    border-left-color:var(--accent2);background:#13181f;
+    font-size:13px;color:#e6edf3;
+  }
+  pre code{background:none;padding:0;color:inherit;font-size:inherit;}
+
+  table{
+    border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;
+  }
+  th,td{
+    border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top;
+  }
+  th{background:var(--bg3);color:#fff;font-weight:600;}
+  tr:nth-child(even) td{background:#13171e;}
+
+  .box{
+    border:1px solid var(--line);border-radius:5px;padding:14px 18px;margin:16px 0;
+    background:var(--bg2);
+  }
+  .box.note{border-left:3px solid var(--accent);}
+  .box.warn{border-left:3px solid var(--warn);}
+  .box.danger{border-left:3px solid var(--danger);}
+  .box.key{border-left:3px solid var(--accent2);}
+  .box .box-t{
+    font-weight:600;color:#fff;font-size:13.5px;
+    display:block;margin-bottom:6px;letter-spacing:.3px;
+  }
+  .box.note .box-t{color:var(--accent);}
+  .box.warn .box-t{color:var(--warn);}
+  .box.danger .box-t{color:var(--danger);}
+  .box.key .box-t{color:var(--accent2);}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:860px){.grid2{grid-template-columns:1fr;}}
+
+  .tag{
+    display:inline-block;padding:1px 8px;border-radius:10px;
+    font-size:11.5px;font-weight:600;margin-right:6px;
+  }
+  .tag.min{background:#1d3a2a;color:var(--accent2);}
+  .tag.max{background:#3d2a1a;color:var(--warn);}
+  .tag.typ{background:#1e2d3d;color:var(--accent);}
+
+  footer{
+    max-width:1180px;margin:0 auto;padding:20px 24px 40px;
+    color:var(--fg-dim);font-size:12.5px;border-top:1px solid var(--line);
+  }
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:#333b47;border-radius:5px;}
+  ::-webkit-scrollbar-thumb:hover{background:#444e5d;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-bar">
+    <h1>数字芯片时序笔记</h1>
+    <span class="sub">SDF 三元组 · Setup / Hold 原理 · 门级仿真 Corner 搭配</span>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button class="active" data-target="p1">1 · SDF 三元组</button>
+    <button data-target="p2">2 · Corner 搭配原理</button>
+    <button data-target="p3">3 · Setup 时序图</button>
+    <button data-target="p4">4 · Hold 时序图</button>
+    <button data-target="p5">5 · 数据窗口合图</button>
+    <button data-target="p6">6 · PT 报告对照</button>
+    <button data-target="p7">7 · 命令速查</button>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============ 1 ============ -->
+<section class="panel active" id="p1">
+  <h2>1 · SDF 三元组 (min : typ : max)</h2>
+
+  <p>SDF 里所有延迟与时序检查值都是三元组，形式 <code>(min:typ:max)</code>，三者对应不同的 <strong>PVT corner</strong>。</p>
+
+  <table>
+    <thead><tr><th style="width:90px">字段</th><th style="width:140px">含义</th><th>典型 corner</th><th>主要用途</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag min">min</span></td><td>最快路径延迟</td><td>FF / 高压 / 低温（best case）</td><td><strong>hold 保持时间检查</strong></td></tr>
+      <tr><td><span class="tag typ">typ</span></td><td>典型值</td><td>TT / 标称电压 / 常温</td><td>功能仿真、参考</td></tr>
+      <tr><td><span class="tag max">max</span></td><td>最慢路径延迟</td><td>SS / 低压 / 高温（worst case）</td><td><strong>setup 建立时间检查</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h3>语法示例</h3>
+<pre><code>(IOPATH A Y (0.082:0.145:0.263) (0.079:0.141:0.258))
+                ↑上升延迟           ↑下降延迟
+(SETUP (posedge D) (posedge CK) (0.045:0.071:0.112))
+(INTERCONNECT u1/Y u2/A (0.011:0.019:0.034))</code></pre>
+  <p>每个外层括号先分 <strong>(上升) (下降)</strong>，每个里面再是 <code>min:typ:max</code>。</p>
+
+  <h3>字段可以留空</h3>
+  <table>
+    <thead><tr><th style="width:140px">写法</th><th>含义</th></tr></thead>
+    <tbody>
+      <tr><td><code>(0.1:0.2:0.3)</code></td><td>三个值齐全</td></tr>
+      <tr><td><code>(0.1::0.3)</code></td><td>typ 缺省</td></tr>
+      <tr><td><code>(::0.3)</code></td><td>只给 max</td></tr>
+      <tr><td><code>(::)</code></td><td>全缺省，由工具 / 库模型决定</td></tr>
+      <tr><td><code>(0.263)</code></td><td>单值，三个 corner 同值</td></tr>
+    </tbody>
+  </table>
+
+  <h3>工程实践中的坑</h3>
+
+  <div class="box warn">
+    <span class="box-t">多数后端流程不会在一份 SDF 里塞三个 corner</span>
+    PrimeTime <code>write_sdf</code> 通常<strong>每个 corner 单独导出一份</strong>，文件里三元组三个值相同，例如 <code>(0.263:0.263:0.263)</code>，再靠 <code>-delay_type min/max</code> 或 corner-specific SDF 文件区分。想要真正 min:typ:max 合一，需要多 corner 合并脚本，或用 <code>-delay_type min_max</code> 只填两端。
+  </div>
+
+  <div class="box note">
+    <span class="box-t">timing check 的三元组语义和延迟不同</span>
+    <code>SETUP</code> / <code>HOLD</code> / <code>RECOVERY</code> / <code>REMOVAL</code> / <code>WIDTH</code> 等检查值的 min/max <strong>不代表快慢 corner</strong>，而是检查门限的取值范围；工程上通常三个填相同值。
+  </div>
+
+  <div class="box danger">
+    <span class="box-t">INTERCONNECT 的 min 值要留意</span>
+    若反标后 min 值异常偏小（接近 0），常是<strong>寄生提取 corner 配错</strong>（例如用了 cbest 却没配对应的器件 corner），会导致 hold 虚假通过 —— 这是最危险的一类静默错误。
+  </div>
+</section>
+
+
+<!-- ============ 2 ============ -->
+<section class="panel" id="p2">
+  <h2>2 · 门级仿真 Corner 搭配原理</h2>
+
+  <div class="box key">
+    <span class="box-t">经典搭配</span>
+    <strong>功能 / setup 验证</strong> → max SDF + SS corner 库 + <code>+maxdelays</code><br>
+    <strong>hold 验证</strong> → min SDF + FF corner 库 + <code>+mindelays</code><br>
+    两者都要跑，<strong>单跑 max 会漏掉全部 hold 违例</strong>。
+  </div>
+
+  <h3>2.1 setup 与 hold 的"受害方向"相反</h3>
+<pre class="formula">setup slack = T_period + T_clk_capture - (T_clk_launch + T_datapath_max + T_setup)
+hold  slack = T_clk_launch + T_datapath_min - (T_clk_capture + T_hold)</pre>
+  <ul>
+    <li><strong>setup</strong>：数据路径延迟<strong>越大</strong>越容易违例 → 用<strong>最慢</strong>延迟去压 → <code>max</code></li>
+    <li><strong>hold</strong>：数据路径延迟<strong>越小</strong>越容易违例 → 用<strong>最快</strong>延迟去压 → <code>min</code></li>
+  </ul>
+  <p>方向相反的两个极端，同一份网表必须跑两遍。</p>
+
+  <h3>2.2 为什么慢 corner 是 SS / 低压 / 高温</h3>
+  <p>晶体管驱动能力 ∝ 载流子迁移率与过驱动电压 <code>(Vgs − Vth)</code>：</p>
+  <table>
+    <thead><tr><th style="width:100px">因素</th><th>慢（max delay）</th><th>快（min delay）</th></tr></thead>
+    <tbody>
+      <tr><td>工艺 P</td><td>SS：阈值电压高、驱动弱</td><td>FF：阈值低、驱动强</td></tr>
+      <tr><td>电压 V</td><td>低压：过驱动小</td><td>高压</td></tr>
+      <tr><td>温度 T</td><td>高温：迁移率下降</td><td>低温</td></tr>
+    </tbody>
+  </table>
+  <p>所以 <code>SS + Vmin + Tmax</code> 给出最大延迟，<code>FF + Vmax + Tmin</code> 给出最小延迟。</p>
+
+  <div class="box warn">
+    <span class="box-t">温度反转 (Temperature Inversion)</span>
+    先进节点（16nm 以下、低压工作）下<strong>低温反而更慢</strong>。此时 corner 必须按 PDK 实际标定来挑，<strong>不能机械套"高温最慢"</strong>。
+  </div>
+
+  <h3>2.3 为什么 SDF 和库必须配对，不能混用</h3>
+  <p>门级仿真的时序由两部分拼出来：</p>
+  <div class="grid2">
+    <div class="box note">
+      <span class="box-t">SDF 提供</span>
+      <code>IOPATH</code> 单元延迟<br>
+      <code>INTERCONNECT</code> 线延迟<br>
+      <code>SETUP</code>/<code>HOLD</code>/<code>RECREM</code>/<code>WIDTH</code> 检查门限值
+    </div>
+    <div class="box note">
+      <span class="box-t">库仿真模型 (.v) 提供</span>
+      逻辑功能<br>
+      <code>specify</code> 块骨架<br>
+      SDF 未覆盖路径的<strong>默认值</strong>
+    </div>
+  </div>
+
+  <p>关键在于 <strong>检查门限本身也是 corner 相关的</strong>。同一个单元的 <code>$hold</code> 要求在 FF 和 SS 下数值不同（通常 FF 下 hold 要求更苛刻）。</p>
+
+  <div class="box danger">
+    <span class="box-t">混搭的两种典型错误</span>
+    <strong>① max SDF 做 hold 验证</strong>：拿 SS 下宽松的 hold 门限，去量一条你又故意让它跑慢的路径 —— <strong>双重乐观，等于没验</strong>。<br><br>
+    <strong>② FF 库 + max SDF</strong>：SDF 未标注的路径会取库里的 FF 值，与已标注部分<strong>不自洽</strong>，报出来的违例真假难辨。
+  </div>
+
+  <h3>2.4 为什么 hold 那一遍绝不能省</h3>
+  <table>
+    <thead><tr><th style="width:120px"></th><th>setup 违例</th><th>hold 违例</th></tr></thead>
+    <tbody>
+      <tr><td>与频率关系</td><td>公式含 <code>T_period</code>，有关</td><td>公式<strong>不含</strong> <code>T_period</code>，无关</td></tr>
+      <tr><td>本质</td><td>路径太慢，赶不上下一拍</td><td>纯粹的<strong>竞争 race</strong>：数据在同一拍内穿过组合逻辑把下级 FF 冲掉</td></tr>
+      <tr><td>流片后能否抢救</td><td><strong>能</strong>：降主频出货</td><td><strong>不能</strong>：任何频率/电压配置都无法规避 → <strong>直接报废</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="box warn">
+    <span class="box-t">hold 风险最集中的地方</span>
+    <strong>DFT scan shift 模式</strong>：扫描链上相邻 FF 之间几乎没有组合逻辑，<code>T_datapath_min</code> 极小。此外跨异步边界、时钟门控路径也是高危区。FF corner 的 scan shift GLS 是必跑项。
+  </div>
+
+  <h3>2.5 GLS 的定位：不是替代 STA</h3>
+  <p>GLS 对 clock 和 data 用<strong>同一个 corner</strong>，而 STA 会做 OCV / AOCV、CRPR（clock reconvergence pessimism removal）、derate 等更精细的处理。</p>
+  <ul>
+    <li><strong>时序是否收敛 → 看 STA</strong>，GLS 不负责签核时序</li>
+    <li><strong>GLS 要抓的是 STA 看不见的东西</strong>：
+      <ul>
+        <li>复位序列、上电初始化导致的 X 传播</li>
+        <li>SDC 里 <code>set_false_path</code> / <code>set_multicycle_path</code> 用错（STA 被你骗了，仿真骗不了）</li>
+        <li>异步 FIFO、握手、跨时钟域的真实行为</li>
+        <li>门控时钟的使能时序、DFT 模式切换</li>
+        <li>库模型 <code>x_transport</code>、负 setup-hold 窗口带来的实际 X</li>
+      </ul>
+    </li>
+  </ul>
+  <p><strong>一句话</strong>：corner 的选择决定了你能暴露哪一类竞争，两个极端都跑才覆盖得住。</p>
+</section>
+
+
+<!-- ============ 3 ============ -->
+<section class="panel" id="p3">
+  <h2>3 · Setup 时序图：edge N 发出，edge N+1 接收</h2>
+
+  <h3>3.1 电路模型（Setup / Hold 共用）</h3>
+<pre class="wave">            ┌────────┐                              ┌────────┐
+  D ───────►│D      Q├──►  组合逻辑  ──────────────►│D      Q├──►
+            │  FF1   │    T_datapath                │  FF2   │
+            │      CK│                              │      CK│
+            └────┬───┘                              └────┬───┘
+                 ▲                                       ▲
+                 │ T_clk_launch                          │ T_clk_capture
+                 └──────────── clk 时钟树 ───────────────┘
+                                   ▲
+                                   │
+                              clk 源（t=0 基准）</pre>
+
+  <div class="box note">
+    <span class="box-t">时间约定</span>
+    原点 <code>t = 0</code> 取<strong>时钟源</strong>的某个上升沿，称 <strong>edge N</strong>；下一沿 <strong>edge N+1</strong> 在 <code>t = T_period</code>。<br>
+    <code>T_datapath</code> 已包含 FF1 的 <code>CK→Q</code>、组合逻辑延迟、以及走线延迟。
+  </div>
+
+  <h3>3.2 波形</h3>
+<pre class="wave">时间 ─────────────────────────────────────────────────────────────────►
+      0                                              T_period
+      │                                                 │
+clk源 │‾‾‾│___________________________________________│‾‾‾│________
+      ▲                                                 ▲
+      │ edge N                                          │ edge N+1
+      │                                                 │
+      │◄─T_clk_launch─►│                                │◄─T_clk_capture─►│
+      │                │                                │                 │
+FF1.CK│________________│‾‾‾│____________________________________________
+                       ▲ 发射沿到达 FF1
+                       │
+                       │◄─────── T_datapath_max ───────►│
+                       │                                │
+FF1.Q ─────────────────┼────────┬═══════════════════════════════════
+      旧数据           │        │ 新数据开始翻转
+                       │        │
+FF2.D ──────────────────────────┼─────┬═════════════════════════════
+                                      ▲ 数据到达 FF2 (data arrival)
+                                      │ = T_clk_launch + T_datapath_max
+                                      │
+                                      │◄─T_setup─►│
+                                      │           │
+FF2.CK│__________________________________________│‾‾‾│______________
+                                                  ▲ 捕获沿到达 FF2
+                                                  │ = T_period + T_clk_capture
+                                                  │   (required time)
+                                      └───slack───┘</pre>
+
+  <h3>3.3 不等式推导</h3>
+  <p><strong>要求</strong>：数据必须在捕获沿<strong>之前至少 T_setup</strong> 就已稳定。</p>
+<pre class="formula">   T_clk_launch + T_datapath_max + T_setup  ≤  T_period + T_clk_capture
+   └──────────── data arrival + setup 要求 ─┘     └─ capture edge 到达时刻 ─┘
+
+移项：
+
+   setup slack = (T_period + T_clk_capture) - (T_clk_launch + T_datapath_max + T_setup)
+                 └──── required time ─────┘   └────────── arrival time ──────────┘</pre>
+
+  <h3>3.4 三个直觉</h3>
+  <ul>
+    <li>公式含 <code>T_period</code> → <strong>setup 与频率有关</strong>。降频使 <code>T_period</code> 变大、slack 变大，所以 setup 违例能靠降频抢救。</li>
+    <li>用 <code>T_datapath_max</code> → 最慢路径最危险 → 对应 <span class="tag max">max</span> <strong>SS / 低压 / 高温 + max SDF</strong>。</li>
+    <li>时钟歪斜 <code>skew = T_clk_capture − T_clk_launch</code> 为<strong>正</strong>（捕获端更晚到）时，setup slack <strong>变大</strong>，是在帮忙。</li>
+  </ul>
+</section>
+
+
+<!-- ============ 4 ============ -->
+<section class="panel" id="p4">
+  <h2>4 · Hold 时序图：edge N 发出，<em>同一个</em> edge N 接收</h2>
+
+  <div class="box danger">
+    <span class="box-t">最容易糊的地方</span>
+    hold 检查里<strong>没有 edge N+1</strong>。发射沿和捕获沿是<strong>同一个时钟沿</strong>。这就是为什么 hold 公式里不出现 <code>T_period</code>。
+  </div>
+
+  <h3>4.1 波形</h3>
+<pre class="wave">时间 ─────────────────────────────────────────────────────────────►
+      0
+      │
+clk源 │‾‾‾│_______________________________________________________
+      ▲
+      │ edge N（launch 和 capture 用的是同一个沿）
+      │
+      │◄─T_clk_launch─►│
+FF1.CK│________________│‾‾‾│____________________________________
+                       ▲ 发射沿到达 FF1
+                       │
+                       │◄──── T_datapath_min ────►│
+                       │                          │
+FF2.D ═══════════════════════════════════════════╗│
+      ◄─────── 旧数据必须保持住的区间 ──────────►║┼──── 新数据冲进来
+                                                  ▲
+                                                  │ 新数据到达 FF2
+                                                  │ = T_clk_launch + T_datapath_min
+      │◄─T_clk_capture─►│                         │
+FF2.CK│_________________│‾‾‾│_______________________________________
+                        ▲ 捕获沿到达 FF2 = T_clk_capture
+                        │
+                        │◄─T_hold─►│              │
+                        │          │◄───slack────►│
+                                   ▲
+                                   数据最早允许变化的时刻
+                                   = T_clk_capture + T_hold</pre>
+
+  <h3>4.2 不等式推导</h3>
+  <p><strong>要求</strong>：FF2 在它自己的时钟沿<strong>之后</strong>，还需要 <code>T_hold</code> 这么久把<strong>旧数据</strong>采稳。所以来自同一沿的新数据<strong>不能太早</strong>冲到。</p>
+<pre class="formula">   T_clk_launch + T_datapath_min  ≥  T_clk_capture + T_hold
+   └──── 新数据到达时刻 ─────────┘     └─ 数据最早可变时刻 ─┘
+
+移项：
+
+   hold slack = (T_clk_launch + T_datapath_min) - (T_clk_capture + T_hold)
+                └─────── arrival time ────────┘   └─── required time ───┘</pre>
+
+  <h3>4.3 三个直觉</h3>
+  <ul>
+    <li>公式<strong>不含 T_period</strong> → <strong>hold 与频率完全无关</strong>。降频、降压、改 PLL 都救不了，流片回来违例就是废片。</li>
+    <li>用 <code>T_datapath_min</code> → 最快路径最危险 → 对应 <span class="tag min">min</span> <strong>FF / 高压 / 低温 + min SDF</strong>。</li>
+    <li>时钟歪斜 <code>skew = T_clk_capture − T_clk_launch</code> 为<strong>正</strong>时，hold slack <strong>变小</strong> —— 与 setup 恰好相反。这就是 CTS 要折中、useful skew 要小心的原因。</li>
+  </ul>
+
+  <h3>4.4 Setup / Hold 对比速查</h3>
+  <table>
+    <thead><tr><th style="width:150px">项</th><th>Setup</th><th>Hold</th></tr></thead>
+    <tbody>
+      <tr><td>发射沿 / 捕获沿</td><td>edge N → edge <strong>N+1</strong></td><td>edge N → edge <strong>N</strong></td></tr>
+      <tr><td>含 T_period</td><td>是</td><td><strong>否</strong></td></tr>
+      <tr><td>危险路径</td><td><code>T_datapath_max</code>（最慢）</td><td><code>T_datapath_min</code>（最快）</td></tr>
+      <tr><td>SDF / 库 corner</td><td><span class="tag max">max</span> SS / 低压 / 高温</td><td><span class="tag min">min</span> FF / 高压 / 低温</td></tr>
+      <tr><td>正 skew 的影响</td><td>改善</td><td>恶化</td></tr>
+      <tr><td>修复手段</td><td>加大驱动、减级数、降频</td><td>插 delay buffer、绕长线</td></tr>
+      <tr><td>流片后可救</td><td>可（降频）</td><td><strong>不可</strong></td></tr>
+    </tbody>
+  </table>
+</section>
+
+
+<!-- ============ 5 ============ -->
+<section class="panel" id="p5">
+  <h2>5 · 数据窗口合图：两者叠在一起看</h2>
+
+  <p>把 FF2 的 D 端<strong>合法数据变化窗口</strong>画出来，setup 与 hold 的冲突关系一目了然。</p>
+
+<pre class="wave">                      ┌─────────── 允许数据翻转的区间 ───────────┐
+                      │                                         │
+      │               │                                         │        │
+FF2.CK│‾‾‾│___________│_________________________________________│____│‾‾‾│
+      ▲   edge N      ▲                                         ▲    edge N+1
+      │               │                                         │
+  T_clk_capture   +T_hold                              −T_setup │
+                      │                                         │
+                      │◄──── 新数据必须落在这个窗口内变化 ──────►│
+                      │                                         │
+            太早 → hold 违例                        太晚 → setup 违例
+            （由 T_datapath_min 决定）              （由 T_datapath_max 决定）
+                      │                                         │
+                      └────── 实际数据翻转的抖动范围 ───────┐    │
+                            ├══════════════════════════════┤    │
+                            ▲                              ▲    │
+                   min 路径到达                   max 路径到达   │
+                                                                │
+                                            留给 setup 的 slack ┘</pre>
+
+  <div class="box key">
+    <span class="box-t">三条结论</span>
+    <strong>窗口左边界</strong>被 <code>T_hold</code> 顶住 → 数据到得越早越危险 → 查 <span class="tag min">min</span><br>
+    <strong>窗口右边界</strong>被 <code>T_setup</code> 与 <code>T_period</code> 顶住 → 数据到得越晚越危险 → 查 <span class="tag max">max</span><br>
+    数据实际翻转落在 <code>[arrival_min, arrival_max]</code> 区间内，<strong>这个区间必须整体落进窗口</strong>
+  </div>
+
+  <h3>5.1 为什么后端修时序这么难</h3>
+  <p>两个方向互相冲突：</p>
+  <ul>
+    <li>把路径<strong>加快</strong>改善 setup → 同时在<strong>恶化 hold</strong></li>
+    <li>插 buffer <strong>修 hold</strong> → 同时在<strong>吃掉 setup slack</strong></li>
+  </ul>
+  <p>后端修时序的本质，就是在这张窗口图里把数据区间挤进去。当 <code>arrival_max − arrival_min</code> 的宽度本身就超过窗口宽度时，<strong>无论怎么调都修不了</strong>，只能回去改设计（减少逻辑级数、重做 pipeline、调整 clock tree）。</p>
+
+  <h3>5.2 这也解释了必须跑两遍 GLS</h3>
+  <p>一次仿真只能用一个 corner 的延迟值，即只能探测窗口的<strong>一侧边界</strong>。两个极端都跑，才覆盖得住整个区间。</p>
+</section>
+
+
+<!-- ============ 6 ============ -->
+<section class="panel" id="p6">
+  <h2>6 · 对照 PrimeTime 报告</h2>
+
+  <h3>6.1 Setup 报告</h3>
+<pre><code>  clock clk (rise edge)                   10.00   10.00   ← T_period
+  clock network delay (propagated)         0.52   10.52   ← + T_clk_capture
+  FF2/CK (DFF)                                    10.52
+  library setup time                      -0.09   10.43   ← − T_setup
+  data required time                              10.43   ← required
+  ------------------------------------------------------
+  data arrival time                               -9.86   ← T_clk_launch + T_datapath_max
+  slack (MET)                                      0.57</code></pre>
+
+  <h3>6.2 Hold 报告</h3>
+<pre><code>  clock clk (rise edge)                    0.00    0.00   ← edge N，注意是 0 不是 T_period
+  clock network delay (propagated)         0.48    0.48   ← + T_clk_capture
+  library hold time                        0.04    0.52   ← + T_hold
+  data required time                               0.52   ← required
+  ------------------------------------------------------
+  data arrival time                                0.61   ← T_clk_launch + T_datapath_min
+  slack (MET)                                      0.09</code></pre>
+
+  <h3>6.3 两处关键差异</h3>
+
+  <div class="box key">
+    <span class="box-t">① clock clk (rise edge) 行：10.00 vs 0.00</span>
+    这一行就是<strong>两个公式差一拍的直接证据</strong>。setup 的捕获沿在 <code>T_period</code>，hold 的捕获沿在 <code>0</code>（同一沿）。
+  </div>
+
+  <div class="box key">
+    <span class="box-t">② clock network delay 数值不同：0.52 vs 0.48</span>
+    因为两份报告取的是<strong>不同的悲观组合</strong>：<br>
+    <strong>setup</strong> → <em>late capture + early launch</em>（让数据显得更赶不上）<br>
+    <strong>hold</strong> → <em>early capture + late launch</em>（让数据显得冲得更早）<br><br>
+    这就是 <strong>OCV / derate / CRPR</strong> 的作用点。
+  </div>
+
+  <div class="box warn">
+    <span class="box-t">GLS 做不到这一点</span>
+    门级仿真中 clock 和 data 只能用<strong>同一个 corner 的同一个值</strong>，无法像 STA 那样对 launch / capture 分别施加不同的悲观度。所以：<br>
+    <strong>时序签核靠 STA，GLS 靠的是发现 STA 约束错误和 X 传播问题。</strong>
+  </div>
+
+  <h3>6.4 读报告的检查清单</h3>
+  <ol>
+    <li>确认 <code>clock clk (rise edge)</code> 的值 → 判断是 setup 还是 hold，以及是否是 multicycle</li>
+    <li><code>propagated</code> 还是 <code>ideal</code> → ideal clock 的报告在 CTS 后就没有参考价值</li>
+    <li><code>library setup/hold time</code> 符号 → 负 setup / 负 hold 是正常的，别当成异常</li>
+    <li>有无 <code>clock reconvergence pessimism</code> 行 → 没有则 CRPR 未开，报告偏悲观</li>
+    <li><code>inter-clock uncertainty</code> → 跨时钟域路径是否该被 false path 掉</li>
+  </ol>
+</section>
+
+
+<!-- ============ 7 ============ -->
+<section class="panel" id="p7">
+  <h2>7 · 命令速查</h2>
+
+  <h3>7.1 VCS 命令行（全局生效）</h3>
+<pre><code>vcs +mindelays    # 取 SDF 三元组的 min
+vcs +typdelays    # 取 typ（默认）
+vcs +maxdelays    # 取 max</code></pre>
+
+  <h3>7.2 $sdf_annotate（TB 内指定）</h3>
+<pre><code>initial $sdf_annotate("top.sdf", dut, , "sdf.log", "MAXIMUM");
+//                                              ↑
+//  可选: "MINIMUM" | "TYPICAL" | "MAXIMUM" | "TOOL_CONTROL"
+//  TOOL_CONTROL 表示交给命令行开关 (+mindelays/+maxdelays) 决定</code></pre>
+
+  <h3>7.3 两套完整跑法</h3>
+<pre><code># ---------- setup 验证 ----------
+vcs -full64 -sverilog \
+    -sdf max:tb.dut:top_ss_0p81v_125c.sdf \
+    +maxdelays \
+    -v /pdk/lib/slow_lib.v \
+    +neg_tchk \
+    -negdelay \
+    tb.sv netlist.v
+
+# ---------- hold 验证 ----------
+vcs -full64 -sverilog \
+    -sdf min:tb.dut:top_ff_0p99v_m40c.sdf \
+    +mindelays \
+    -v /pdk/lib/fast_lib.v \
+    +neg_tchk \
+    -negdelay \
+    tb.sv netlist.v</code></pre>
+
+  <h3>7.4 常用开关的取舍</h3>
+  <table>
+    <thead><tr><th style="width:170px">开关</th><th>作用</th><th>建议</th></tr></thead>
+    <tbody>
+      <tr><td><code>+neg_tchk</code> / <code>-negdelay</code></td><td>使能负时序检查</td><td><strong>必开</strong>，保持与 STA 一致，否则负 setup/hold 的单元会误报</td></tr>
+      <tr><td><code>+no_notifier</code></td><td>违例时不产生 X</td><td>调试初期可用；<strong>签核绝不能关</strong> —— 关掉等于违例"仿过了"</td></tr>
+      <tr><td><code>+nospecify</code></td><td>忽略全部 specify 块</td><td>只用于纯功能/零延迟仿真，<strong>时序验证下严禁</strong></td></tr>
+      <tr><td><code>+notimingcheck</code></td><td>保留延迟但关闭所有检查</td><td>同上，仅用于定位 X 来源时临时使用</td></tr>
+      <tr><td><code>+sdfverbose</code></td><td>打印 SDF 反标详情</td><td>首次反标<strong>必看</strong>，确认 matched / unmatched 数量</td></tr>
+      <tr><td><code>-diag timescale</code></td><td>检查 timescale 不一致</td><td>SDF 单位与仿真精度不匹配会导致延迟被截断为 0</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box danger">
+    <span class="box-t">反标后第一件事：查 sdf.log</span>
+    必须确认 <strong>unmatched / not annotated</strong> 的条目数量。大量未匹配通常意味着：<br>
+    · 层次路径（scope）给错<br>
+    · 网表与 SDF 版本不一致<br>
+    · 单元名在综合后被改名（如加了 <code>_BUFF</code> 后缀）<br>
+    未匹配的路径会取库默认值（通常接近 0），<strong>导致时序验证形同虚设</strong>。
+  </div>
+
+  <h3>7.5 PrimeTime 导出 SDF</h3>
+<pre><code># 单 corner，三元组同值
+write_sdf -version 3.0 -significant_digits 4 top_ss.sdf
+
+# 只填 min / max 两端
+write_sdf -delay_type min_max top_minmax.sdf
+
+# 仅 max（setup 用）
+write_sdf -delay_type max top_max.sdf</code></pre>
+</section>
+
+</main>
+
+<footer>
+  数字芯片时序笔记 · SDF 三元组与 Setup/Hold 原理 · 所有波形图均为 ASCII 示意，非等比时间轴
+</footer>
+
+<script>
+  const tabs = document.querySelectorAll('#tabs button');
+  const panels = document.querySelectorAll('section.panel');
+  tabs.forEach(btn => btn.addEventListener('click', () => {
+    tabs.forEach(b => b.classList.remove('active'));
+    panels.forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.target).classList.add('active');
+    window.scrollTo({top:0, behavior:'smooth'});
+    location.hash = btn.dataset.target;
+  }));
+  // 支持 URL hash 直达
+  if (location.hash) {
+    const t = document.querySelector(`#tabs button[data-target="${location.hash.slice(1)}"]`);
+    if (t) t.click();
+  }
+  // 左右方向键切换
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    const list = [...tabs];
+    const i = list.findIndex(b => b.classList.contains('active'));
+    if (e.key === 'ArrowRight' && i < list.length - 1) list[i+1].click();
+    if (e.key === 'ArrowLeft'  && i > 0)               list[i-1].click();
+  });
+</script>
+</body>
+</html>
