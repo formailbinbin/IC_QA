@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>复位架构与多周期约束</title>
+<style>:root{--bg:#ffffff;--fg:#1f2328;--muted:#656d76;--line:#d1d9e0;--code-bg:#f6f8fa;--accent:#0969da;--warn-bg:#fff8c5;--warn-line:#d4a72c;--ok-bg:#dafbe1;--ok-line:#2da44e;--bad-bg:#ffebe9;--bad-line:#cf222e}
+*{box-sizing:border-box}
+body{margin:0;padding:0 24px 80px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans","PingFang SC","Microsoft YaHei",Helvetica,Arial,sans-serif;font-size:16px;line-height:1.7;color:var(--fg);background:var(--bg)}
+.wrap{max-width:900px;margin:0 auto}
+header{padding:40px 0 8px}
+h1{font-size:30px;font-weight:600;margin:0 0 8px;line-height:1.3}
+header .sub{color:var(--muted);font-size:15px;margin:0}
+h2{font-size:23px;font-weight:600;margin:48px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+h3{font-size:18px;font-weight:600;margin:32px 0 12px}
+h4{font-size:16px;font-weight:600;margin:24px 0 8px}
+p{margin:12px 0}
+ul,ol{margin:12px 0;padding-left:26px}
+li{margin:6px 0}
+code{font-family:ui-monospace,Consolas,"Courier New",monospace;font-size:13.5px;background:var(--code-bg);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin:16px 0;overflow-x:auto}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.55}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14.5px}
+th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+th{background:var(--code-bg);font-weight:600}
+.note,.warn,.good,.bad{padding:12px 16px;margin:16px 0;border-radius:6px;border-left:4px solid var(--accent);background:#ddf4ff}
+.warn{border-left-color:var(--warn-line);background:var(--warn-bg)}
+.good{border-left-color:var(--ok-line);background:var(--ok-bg)}
+.bad{border-left-color:var(--bad-line);background:var(--bad-bg)}
+.note p:first-child,.warn p:first-child,.good p:first-child,.bad p:first-child{margin-top:0}
+.note p:last-child,.warn p:last-child,.good p:last-child,.bad p:last-child{margin-bottom:0}
+.diagram{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:18px;margin:16px 0;overflow-x:auto;font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre}
+.formula{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:14px 18px;margin:16px 0;text-align:center;font-family:ui-monospace,Consolas,monospace;font-size:15px;overflow-x:auto}
+.fileref{font-family:ui-monospace,Consolas,monospace;font-size:13.5px;color:var(--accent)}
+.part{margin:72px 0 8px;padding:16px 20px;border-radius:8px;background:#ddf4ff;border:1px solid #9fd0fb}
+.part .pn{font-size:12px;color:var(--accent);font-weight:600;letter-spacing:1px}
+.part h2{border:0;margin:2px 0 0;padding:0;font-size:26px}
+.part .pd{margin:6px 0 0;color:#4a5a6a;font-size:14px}
+footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+#nav{position:fixed;top:0;left:0;width:264px;height:100vh;overflow-y:auto;padding:28px 14px 40px;background:var(--code-bg);border-right:1px solid var(--line);font-size:13.5px;line-height:1.5;z-index:20}
+#nav .nav-title{font-weight:600;font-size:14px;margin:0 0 12px;padding-left:8px;color:var(--fg)}
+#nav a{display:block;color:var(--muted);text-decoration:none;padding:3px 8px;border-radius:4px;border-left:2px solid transparent}
+#nav a:hover{background:#eaeef2;color:var(--fg)}
+#nav a.active{color:var(--accent);background:#ddf4ff;border-left-color:var(--accent);font-weight:600}
+#nav a.lv1{font-weight:600;color:var(--fg);margin-top:10px}
+#nav a.lv2{padding-left:20px}
+#nav a.lv3{padding-left:34px;font-size:13px}
+body.has-nav .wrap{margin-left:264px}
+#nav-toggle{display:none;position:fixed;top:12px;left:12px;z-index:30;width:38px;height:38px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:17px;cursor:pointer}
+@media (max-width:1180px){#nav{transform:translateX(-100%);transition:transform .2s ease}#nav.open{transform:none;box-shadow:0 0 0 100vmax rgba(0,0,0,.25)}body.has-nav .wrap{margin-left:0}#nav-toggle{display:block}header{padding-top:60px}}</style>
+</head>
+<body class="has-nav">
+<button id="nav-toggle" title="目录">☰</button>
+<nav id="nav">
+<p class="nav-title">目录</p>
+<a class="lv1" href="#P1">第一部分 · 复位架构</a>
+<a class="lv2" href="#1">1. 异步复位 vs 同步复位</a>
+<a class="lv2" href="#2">2. 异步复位、同步释放</a>
+<a class="lv2" href="#3">3. 时序收敛：recovery / removal</a>
+<a class="lv2" href="#4">4. 高频下同步释放的难点</a>
+<a class="lv2" href="#5">5. 同步复位的适用场景</a>
+<a class="lv2" href="#6">6. 时钟门控场景的行为差异</a>
+<a class="lv1" href="#P2">第二部分 · set_multicycle_path</a>
+<a class="lv2" href="#7">7. STA 的默认检查模型</a>
+<a class="lv2" href="#8">8. MCP 原理：移动检查沿</a>
+<a class="lv2" href="#9">9. 为什么 hold 必须配对</a>
+<a class="lv2" href="#10">10. -start / -end 基准</a>
+<a class="lv2" href="#11">11. 与其他 exception 的选择</a>
+<a class="lv2" href="#12">12. MCP 的本质代价</a>
+<a class="lv1" href="#P3">第三部分 · 实际 SDC Review</a>
+<a class="lv2" href="#13">13. 复位同步器 MCP（-setup 9）</a>
+<a class="lv2" href="#14">14. reg-to-pad MCP（IO_PWM*）</a>
+<a class="lv2" href="#15">15. 验证命令清单</a>
+</nav>
+<div class="wrap">
+<header>
+<h1>复位架构与多周期约束</h1>
+<p class="sub">异步/同步复位 · 异步复位同步释放 · 时钟门控交互 · set_multicycle_path 原理与实战 Review</p>
+</header>
+<div class="part" id="P1">
+<div class="pn">第 一 部 分</div>
+<h2>复位架构</h2>
+<p class="pd">从两种复位方式的本质差异出发，推进到工业界标准方案、时序收敛手段、高频物理极限，以及与时钟门控的交互陷阱。</p>
+</div>
+<h2 id="1">1. 异步复位 vs 同步复位</h2>
+<h3 id="1-1">1.1 两种写法</h3>
+<p>差别只在复位信号有没有进入 <code>always</code> 的敏感列表。</p>
+<pre><code>// 异步复位：rst_n 在敏感列表里，不等时钟
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) q &lt;= 1'b0;
+    else        q &lt;= d;
+end
+
+// 同步复位：rst_n 只是普通数据，必须等时钟沿
+always @(posedge clk) begin
+    if (!rst_n) q &lt;= 1'b0;
+    else        q &lt;= d;
+end</code></pre>
+<p>综合结果完全不同：异步复位映射到带 <code>RN</code> 引脚的专用复位触发器（如 <code>DFFRQ</code>），复位走的是触发器内部的异步置位/复位端；同步复位综合成普通 D 触发器，复位逻辑被揉进 D 输入前的组合逻辑（相当于 <code>d &amp; rst_n</code>）。</p>
+<h3 id="1-2">1.2 对比表</h3>
+<table>
+<tr><th>维度</th><th>异步复位</th><th>同步复位</th></tr>
+<tr><td>生效时机</td><td>立即，不依赖时钟</td><td>必须等到有效时钟沿</td></tr>
+<tr><td>时钟未起振时</td><td>仍然有效（上电关键优势）</td><td>完全失效</td></tr>
+<tr><td>面积</td><td>复位 FF 单元略大，但无额外组合逻辑</td><td>普通 FF + 每位一个与门，数据路径变长</td></tr>
+<tr><td>对时序路径的影响</td><td>不占用数据路径时序预算</td><td>插入 D 前，吃掉 setup 余量</td></tr>
+<tr><td>毛刺敏感性</td><td>高。复位线上任何窄脉冲都会误复位</td><td>低。窄于一个周期的脉冲会被时钟采样滤掉</td></tr>
+<tr><td>STA 检查类型</td><td>recovery / removal</td><td>普通 setup / hold</td></tr>
+<tr><td>亚稳态风险</td><td>释放沿若落在时钟沿附近会产生亚稳态</td><td>无（本质是数据，满足 setup 即可）</td></tr>
+<tr><td>DFT 可控性</td><td>需把复位端接到 scan 可控，否则 scan shift 被破坏</td><td>天然可控，复位走数据路径</td></tr>
+<tr><td>仿真与综合一致性</td><td>复位释放的竞争在 RTL 仿真可能看不出来</td><td>行为确定，易复现</td></tr>
+</table>
+<h3 id="1-3">1.3 各自的致命缺陷</h3>
+<div class="bad">
+<p><strong>纯异步复位的问题：复位释放时的亚稳态。</strong></p>
+<p>复位断言没问题——它本来就是要让电路立刻进入已知状态。危险全在<strong>释放</strong>瞬间：如果 <code>rst_n</code> 从 0 跳到 1 的时刻恰好落在 <code>clk</code> 上升沿附近的 recovery 窗口内，触发器内部处于"刚被放开又马上被要求采样"的竞争状态，输出可能进入亚稳态，然后在下游随机地解析成 0 或 1。</p>
+<p>更糟的是：复位树上不同位置的 FF 看到释放沿的时间不同，有的在这个周期退出复位，有的在下一个周期退出，状态机可能跳进非法状态。</p>
+</div>
+<div class="bad">
+<p><strong>纯同步复位的问题：依赖时钟存在。</strong></p>
+<p>上电瞬间 PLL 没锁定、时钟没起振，同步复位根本无法生效，所有 FF 停在随机初值。如果这些随机值驱动了 pad、电源开关、或 PWM 输出，后果可能是硬件损坏。</p>
+<p>此外，若时钟被门控关闭，一个短于门控窗口的同步复位脉冲会被<strong>永久丢失</strong>（详见 <a href="#6">第 6 章</a>）。</p>
+</div>
+<h2 id="2">2. 异步复位、同步释放</h2>
+<p>既然异步复位怕释放、同步复位怕没时钟，工业界的标准答案就是把两者的优点拼起来：<strong>断言走异步路径（立即生效、不依赖时钟），释放走同步路径（对齐时钟沿、消除亚稳态）</strong>。英文叫 <em>Asynchronous Assert, Synchronous De-assert</em>。</p>
+<h3 id="2-1">2.1 复位同步器标准实现</h3>
+<pre><code>module reset_sync (
+    input  wire clk,
+    input  wire rst_async_n,   // 来自 PAD / PMU 的原始异步复位
+    output wire rst_sync_n     // 送给本时钟域所有 FF
+);
+    reg r1, r2;
+
+    always @(posedge clk or negedge rst_async_n) begin
+        if (!rst_async_n) begin
+            r1 &lt;= 1'b0;
+            r2 &lt;= 1'b0;
+        end else begin
+            r1 &lt;= 1'b1;        // 注意：D 端是常量 1，不是数据
+            r2 &lt;= r1;
+        end
+    end
+
+    assign rst_sync_n = r2;
+endmodule</code></pre>
+<h3 id="2-2">2.2 工作过程</h3>
+<div class="diagram">clk          ─┐_┌─┐_┌─┐_┌─┐_┌─┐_┌─┐_┌─┐_┌─┐_┌─
+rst_async_n  ───┐                 ┌──────────────
+                └─────────────────┘
+                ↑ 异步断言         ↑ 异步释放（时刻任意）
+r1           ───┐                 └─┐
+                └───────────────────┘   ← 第 1 个时钟沿后置 1
+                                      （可能亚稳态，但不输出）
+r2 = rst_sync_n ─┐                   └─┐
+                 └─────────────────────┘ ← 第 2 个沿后置 1
+                                         （干净、对齐时钟）</div>
+<ul>
+<li><strong>断言阶段</strong>：<code>rst_async_n</code> 一拉低，两个 FF 通过异步复位端立即清零，<code>rst_sync_n</code> 瞬间变 0。不需要时钟，上电无时钟时也有效。</li>
+<li><strong>释放阶段</strong>：<code>rst_async_n</code> 拉高后，两个 FF 退出异步复位状态，但 D 端的常量 1 需要两个时钟沿才传到 <code>r2</code>。<code>r1</code> 承担了可能的亚稳态，<code>r2</code> 给它一整个周期去稳定。</li>
+</ul>
+<div class="note">
+<p><strong>为什么 D 端接常量 1 很关键？</strong>因为这样 <code>r1</code> 的亚稳态只可能解析成 0 或 1，而「解析成 0」只意味着复位晚释放一个周期——<strong>功能上无害</strong>。如果 D 端接的是真实数据，亚稳态解析错误会直接造成功能错误。这是复位同步器与普通 CDC 同步器的本质区别。</p>
+</div>
+<h3 id="2-3">2.3 每个时钟域一个同步器</h3>
+<p>多时钟域设计中，<strong>不能</strong>用一个同步器的输出去复位所有域。正确做法是原始异步复位扇出到每个域，各自做同步。</p>
+<pre><code>reset_sync u_rst_sync_cpu (.clk(clk_cpu), .rst_async_n(por_n), .rst_sync_n(rst_cpu_n));
+reset_sync u_rst_sync_ddr (.clk(clk_ddr), .rst_async_n(por_n), .rst_sync_n(rst_ddr_n));
+reset_sync u_rst_sync_pwm (.clk(clk_pwm), .rst_async_n(por_n), .rst_sync_n(rst_pwm_n));</code></pre>
+<div class="warn">
+<p><strong>RDC（Reset Domain Crossing）</strong>：如果信号从 <code>rst_cpu_n</code> 域的 FF 传到 <code>rst_ddr_n</code> 域的 FF，而两个复位的释放时刻不同步，就存在 RDC 风险——源 FF 已被复位清零，目标 FF 还在正常工作并采到了这个「复位引起的跳变」，可能被误当成有效数据。这类问题普通 CDC 检查抓不到，需要用 Spyglass RDC / Questa CDC 的 RDC 模式专门扫描。</p>
+</div>
+<h2 id="3">3. 时序收敛：recovery / removal</h2>
+<p>用了「异步复位、同步释放」之后，<code>rst_sync_n</code> 到各个 FF 复位端的这段路径就成了一条<strong>需要被 STA 签核的真实时序路径</strong>。它不再是 false path。</p>
+<h3 id="3-1">3.1 两个检查的定义</h3>
+<table>
+<tr><th>检查</th><th>约束对象</th><th>含义</th><th>类比</th></tr>
+<tr><td><strong>recovery</strong></td><td>复位<strong>释放</strong>沿</td><td>复位撤销后，必须至少提前 <code>T_recovery</code> 稳定，才能迎接下一个时钟有效沿</td><td>类似 setup</td></tr>
+<tr><td><strong>removal</strong></td><td>复位<strong>释放</strong>沿</td><td>时钟有效沿之后，复位必须继续保持有效至少 <code>T_removal</code>，不能过早撤销</td><td>类似 hold</td></tr>
+</table>
+<div class="diagram">                    ┌──────── clk 有效沿
+                    │
+   ←─ recovery ──→  │  ←─ removal ──→
+ ─────────────────┐ │ ┌───────────────
+ rst_n            └─┼─┘
+                    │
+        ↑ 合法释放区在这个窗口之外
+        （落在窗口内 → 亚稳态）</div>
+<h3 id="3-2">3.2 关键路径与 slack 公式</h3>
+<p>需要收敛的路径是：<strong>同步器末级 FF 的 Q 端 → 复位分发网络 → 目标 FF 的 RN 端</strong>。</p>
+<div class="formula">slack = T_period − T<sub>ck2q</sub>(r2) − T<sub>reset_tree</sub> − T<sub>recovery</sub> − uncertainty</div>
+<p>其中 <code>T_reset_tree</code> 是复位信号从同步器输出到最远 FF 复位端的组合延迟（含 buffer 树）。这条路径的发起点和捕获点用的是<strong>同一个时钟</strong>，所以默认按单周期检查——留给复位树的预算只有不到一个时钟周期。</p>
+<p>removal 方向则是另一边的约束：</p>
+<div class="formula">T<sub>reset_tree</sub> ≥ clk_tree_delay + T<sub>removal</sub> − T<sub>ck2q</sub></div>
+<div class="warn">
+<p><strong>双边夹击</strong>：复位树延迟被两侧同时挤压，必须落在这个窗口内：</p>
+<p><code>clk_tree_delay ≤ T_reset_tree ≤ clk_tree_delay + T − T_recovery</code></p>
+<p>这意味着<strong>复位树的延迟必须与时钟树的延迟大致匹配</strong>。复位树太快会违反 removal，太慢会违反 recovery。</p>
+</div>
+<h3 id="3-3">3.3 SDC 约束要点</h3>
+<h4>（1）原始异步复位的输入端</h4>
+<p>原始 <code>por_n</code> 从 PAD 进来，与任何时钟都没有相位关系，断言方向无需检查：</p>
+<pre><code>set_false_path -from [get_ports por_n] -to [all_registers]
+# 或更精确：只放过原始复位到同步器第一级的路径
+set_false_path -from [get_ports por_n] \
+               -to [get_pins u_rst_sync/r1_reg/RN]</code></pre>
+<h4>（2）复位同步器的保护</h4>
+<pre><code># 禁止综合工具把同步器优化掉 / clone / retime
+set_dont_touch [get_cells u_rst_sync/r1_reg]
+set_dont_touch [get_cells u_rst_sync/r2_reg]
+# 或用 size_only，允许改驱动但不许改结构
+set_size_only  [get_cells u_rst_sync/*_reg]</code></pre>
+<div class="bad">
+<p><strong>为什么必须 dont_touch？</strong>如果同步器输出扇出很大，物理实现工具很可能做 <strong>register cloning</strong>，复制出 <code>r2_reg_1</code>、<code>r2_reg_2</code> 去分别驱动不同区域。此时：</p>
+<ul>
+<li>每个 clone 独立承担亚稳态风险，它们可能在<strong>不同周期</strong>释放复位；</li>
+<li>原本写的 SDC exception 只匹配了 <code>r2_reg/Q</code>，clone 出来的新实例<strong>静默未被匹配</strong>，约束失效且无报错；</li>
+<li>这类失配极难在后期发现，典型的「硅后才暴露」的 bug。</li>
+</ul>
+</div>
+<h4>（3）复位树按时钟方式做 CTS</h4>
+<p>要让 <code>T_reset_tree</code> 与时钟树匹配，关键是让 CTS 把复位网络当作 clock-like net 来处理，做 skew 平衡而不是简单的 buffer 插入。</p>
+<pre><code># ICC2 / Innovus 风格：把复位网设为 clock-like，参与 skew balance
+set_clock_sense -stop_propagation [get_pins u_rst_sync/r2_reg/Q]
+create_clock_tree ...   # 工具相关
+
+# 把复位网络标为非默认路由规则，减小延迟与变化
+set_clock_routing_rule -net [get_nets rst_sync_n] -rule RST_RULE
+
+# 控制复位网最大 transition / skew
+set_max_transition 0.10 [get_nets rst_sync_n]</code></pre>
+<h4>（4）CPPR / CRPR 必须打开</h4>
+<p>recovery/removal 路径的发起时钟与捕获时钟共享大段时钟树。如果不做公共路径悲观度抵消，这段共享路径的 OCV derate 会被重复计算两次（一次按 max、一次按 min），产生巨大的虚假悲观。</p>
+<pre><code>set timing_remove_clock_reconvergence_pessimism true
+# 或 PrimeTime
+set_app_var timing_remove_clock_reconvergence_pessimism true</code></pre>
+<h2 id="4">4. 高频下同步释放的难点</h2>
+<h3 id="4-1">4.1 核心矛盾：预算被压缩到不可解</h3>
+<p>再看一次 recovery 的 slack 公式：</p>
+<div class="formula">slack = T − T<sub>ck2q</sub>(r2) − T<sub>reset_tree</sub> − T<sub>recovery</sub> − uncertainty</div>
+<p><code>T_ck2q</code>、<code>T_recovery</code>、<code>uncertainty</code> 都是工艺/库决定的固定量，几乎不随频率变化。频率升高时只有 <code>T</code> 在缩小，于是留给 <code>T_reset_tree</code> 的空间被单方面挤压。</p>
+<table>
+<tr><th>频率</th><th>T</th><th>T<sub>ck2q</sub>+T<sub>recovery</sub>+unc（典型）</th><th>留给复位树</th><th>可行性</th></tr>
+<tr><td>100 MHz</td><td>10 ns</td><td>≈ 0.45 ns</td><td>≈ 9.5 ns</td><td>随便做</td></tr>
+<tr><td>500 MHz</td><td>2 ns</td><td>≈ 0.45 ns</td><td>≈ 1.55 ns</td><td>要规划</td></tr>
+<tr><td>1 GHz</td><td>1 ns</td><td>≈ 0.45 ns</td><td>≈ 0.55 ns</td><td>很紧</td></tr>
+<tr><td>2 GHz</td><td>0.5 ns</td><td>≈ 0.45 ns</td><td>≈ 0.05 ns</td><td>基本不可能</td></tr>
+</table>
+<div class="bad">
+<p>在 2 GHz 下，一个全芯片范围的复位网络、跨越几毫米、驱动上万个 FF，物理上<strong>不可能</strong>把延迟压到 0.05 ns。这时再怎么调 SDC 都没用，必须改架构。</p>
+</div>
+BODY1
+<footer>本文整理自一次关于复位架构与 SDC 多周期约束的技术讨论。</footer>
+</div>
+<script>SCRIPTHERE</script>
+</body>
+</html>
