@@ -74,6 +74,7 @@
   }
   h3:first-of-type{margin-top:8px;}
   h4{font-size:14.5px;margin:20px 0 8px;color:var(--purple);font-weight:600;}
+  h5{font-size:13.5px;margin:18px 0 6px;color:var(--warn);font-weight:600;}
   p{margin:10px 0;}
   ul,ol{margin:10px 0;padding-left:24px;}
   li{margin:6px 0;}
@@ -444,6 +445,267 @@
     </tbody>
   </table>
 
+  <h4>① SETUP / HOLD：围住同一个时钟沿的两侧</h4>
+  <p>两者参考<strong>同一个</strong>时钟沿，一个管左边界、一个管右边界，共同夹出一个禁止数据变化的窗口。</p>
+<pre class="wave">
+                        ┊
+                        ┊ ← 参考沿 (posedge CK)
+   CK   ────────────────┨▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+                   ┌────┊────┐
+                   │    ┊    │
+        ───────────┤ 禁止变化 ├──────────────
+                   │ 窗  ┊ 口 │
+                   └────┊────┘
+                   │←──→┊←──→│
+                   │ Ts  ┊ Th │
+                   │     ┊    │
+   D    ═══════════╳▒▒▒▒▒▒▒▒▒▒╳══════════════
+        数据必须在 ↑        稳定到 ↑ 之后才可变
+        这之前稳定
+
+   (SETUP D (posedge CK) (0.045::0.045))   → Ts = 45 ps  沿<em>之前</em>
+   (HOLD  D (posedge CK) (0.012::0.012))   → Th = 12 ps  沿<em>之后</em></pre>
+
+  <div class="box key">
+    <span class="box-t">和第 4、5 章公式的对应关系</span>
+    这里的 <code>Ts</code> 就是 setup slack 公式里的 <code>T_setup</code>，
+    <code>Th</code> 就是 hold slack 公式里的 <code>T_hold</code>。<br>
+    SDF 的 TIMINGCHECK <strong>只提供门限值</strong>（窗口有多宽），
+    数据什么时候到达则由 <code>DELAY</code> 段的 IOPATH + INTERCONNECT 累加决定。
+  </div>
+
+  <h4>② SETUPHOLD：二合一写法</h4>
+<pre><code>(SETUPHOLD D (posedge CK) (0.045::0.045) (0.012::0.012))
+                          └── setup ──┘ └── hold ──┘
+                             顺序固定，不可颠倒</code></pre>
+  <div class="box warn">
+    <span class="box-t">为什么库普遍用合并写法</span>
+    仿真器处理<strong>负</strong> setup/hold 时需要同时知道两个值才能正确构造检查窗口
+    （例如 setup=−8ps、hold=+20ps 时窗口整体右移）。
+    分开写的 <code>SETUP</code>+<code>HOLD</code> 无法表达这种耦合，
+    所以绝大多数 PDK 导出的是 <code>SETUPHOLD</code>。
+  </div>
+
+  <h4>③ 负 setup / 负 hold 时窗口如何移动</h4>
+<pre class="wave">
+   正常 (Ts>0, Th>0)：窗口跨在沿两侧
+                          ┊
+        ──────────┤▒▒▒▒▒▒▒┊▒▒▒▒▒├──────────
+                          ┊ 沿
+
+   负 setup (Ts<0)：窗口整体<em>右移</em>，数据可以晚于沿到达
+                          ┊
+        ─────────────────┤┊▒▒▒▒▒▒▒▒▒▒▒├────
+                          ┊ 沿
+                          │←→│ |Ts|
+
+   负 hold (Th<0)：窗口整体<em>左移</em>，数据可以在沿之前就变
+                          ┊
+        ────┤▒▒▒▒▒▒▒▒▒▒▒┤ ┊ ──────────────
+                          ┊ 沿
+                      |Th| │←→│</pre>
+  <p>负值的物理来源：数据脚和时钟脚从单元引脚到内部采样点的<strong>内部走线延迟不同</strong>。
+  若数据的内部路径比时钟短得多，数据即使晚一点到达引脚，仍能先到采样点。</p>
+
+  <h4>④ RECOVERY / REMOVAL：异步信号版的 setup / hold</h4>
+
+  <div class="box key">
+    <span class="box-t">先理解要防的是什么事</span>
+    异步复位有效期间，触发器的输出被<strong>复位电路直接按住</strong>，与时钟无关。<br>
+    复位<strong>释放</strong>的那一瞬间，触发器的控制权从"复位电路"交还给"时钟采样电路"。<br>
+    如果这个<strong>交接</strong>动作正好和时钟有效沿<strong>撞在一起</strong>，
+    触发器就不知道该听谁 —— 内部节点被两边同时拉扯，结果是<strong>亚稳态</strong>或输出不定值。<br><br>
+    <code>RECOVERY</code> 和 <code>REMOVAL</code> 要做的，就是
+    <strong>把"释放沿"和"时钟沿"隔开足够远</strong>。
+  </div>
+
+  <div class="box warn">
+    <span class="box-t">只检查"释放"，不检查"进入有效"</span>
+    复位<strong>进入</strong>有效（assert）是异步的，什么时刻都允许 —— 复位压下去就是复位，没有歧义。<br>
+    只有<strong>退出</strong>有效（de-assert / release）时才存在"听时钟还是听复位"的争用。<br>
+    所以 <code>RECOVERY</code> / <code>REMOVAL</code> 的参考事件永远是<strong>释放沿</strong>。
+  </div>
+
+  <h4>两者合起来 = 以时钟沿为中心的"禁止释放窗口"</h4>
+  <p>这是理解它们的唯一关键图。<strong>结构和 ① 的 SETUP/HOLD 窗口完全一样</strong>，
+  只是被约束的对象从"数据变化"换成了"复位释放"。</p>
+<pre class="wave">
+                                   ┊
+                                   ┊ ← 时钟有效沿 (posedge CK)
+   CK   ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁╱▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+                       ┌───────────┊───────────┐
+                       │   释放沿禁止落在这里   │
+                       └───────────┊───────────┘
+                       │←── Trec ──┊── Trem ──→│
+                       ┊           ┊           ┊
+        ───── 合法 ✓ ──┤  违例 ✗   ┊   违例 ✗  ├── 合法 ✓ ─────
+                       ┊           ┊           ┊
+   情形 A：释放得<em>够早</em>（RECOVERY 满足）
+   RN   ▁▁▁▁▁▁▁▁╱▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+                ↑ 释放沿在窗口左侧之外，距沿 ≥ Trec
+
+   情形 B：释放得<em>够晚</em>（REMOVAL 满足）
+   RN   ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁╱▔▔▔▔▔▔▔▔▔▔
+                                          ↑ 释放沿在窗口右侧之外，距沿 ≥ Trem
+
+   情形 C：释放沿落进窗口 → 违例
+   RN   ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁╱▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+                           ↑ 距时钟沿太近，交接与采样撞车 → 亚稳态</pre>
+
+  <div class="box key">
+    <span class="box-t">一句话区分</span>
+    · <strong>RECOVERY</strong>：释放沿在时钟沿<strong>之前</strong> → 必须<strong>早</strong>够 <code>Trec</code>，
+      让触发器有时间"恢复"到可被时钟正常采样的状态（recovery = 恢复）<br>
+    · <strong>REMOVAL</strong>：释放沿在时钟沿<strong>之后</strong> → 必须<strong>晚</strong>够 <code>Trem</code>，
+      即复位在沿之后还要再"按住"一会儿才能移除（removal = 移除）
+  </div>
+
+  <h4>与 SETUP / HOLD 的逐项类比</h4>
+  <table>
+    <thead><tr><th style="width:120px"></th><th style="width:220px">SETUP / HOLD</th><th>RECOVERY / REMOVAL</th></tr></thead>
+    <tbody>
+      <tr><td>被约束的信号</td><td>数据 <code>D</code></td><td>异步控制（复位 / 置位 / 清零）</td></tr>
+      <tr><td>被约束的动作</td><td>数据<strong>变化</strong></td><td>控制信号<strong>释放</strong></td></tr>
+      <tr><td>窗口左边界</td><td><code>SETUP</code>（沿之前要稳定多久）</td><td><code>RECOVERY</code>（沿之前要释放多久）</td></tr>
+      <tr><td>窗口右边界</td><td><code>HOLD</code>（沿之后要保持多久）</td><td><code>REMOVAL</code>（沿之后要保持多久）</td></tr>
+      <tr><td>合并写法</td><td><code>SETUPHOLD</code></td><td><code>RECREM</code></td></tr>
+      <tr><td>违例后果</td><td>采到错误数据 / 亚稳态</td><td>复位值不确定 / 亚稳态</td></tr>
+    </tbody>
+  </table>
+
+  <h4>SDF 写法与边沿方向</h4>
+<pre><code># 低有效异步复位 RN（active-low）：释放是 0→1，即 posedge
+(RECOVERY (posedge RN) (posedge CK) (0.060::0.060))              → Trec = 60 ps
+(REMOVAL  (posedge RN) (posedge CK) (0.020::0.020))              → Trem = 20 ps
+(RECREM   (posedge RN) (posedge CK) (0.060::0.060) (0.020::0.020))  ← 合并写法
+
+# 高有效异步复位 RST（active-high）：释放是 1→0，即 negedge
+(RECREM   (negedge RST) (posedge CK) (0.060::0.060) (0.020::0.020))</code></pre>
+
+  <div class="box note">
+    <span class="box-t">边沿方向的判定规则</span>
+    参考事件写的是<strong>"释放"那一侧的边沿方向</strong>，由复位的有效极性决定：<br>
+    · 低有效 <code>RN</code> / <code>CDN</code> / <code>RESETB</code> → 释放 = <code>posedge</code><br>
+    · 高有效 <code>RST</code> / <code>CLR</code> → 释放 = <code>negedge</code><br><br>
+    判定依据以库 <code>.v</code> 中 <code>$recrem</code> / <code>$recovery</code> 的<strong>第一个实参</strong>为准。
+    第 9.5 节的 <code>(RECREM (posedge CDN) (posedge CP) ...)</code> 就是低有效清零脚的典型写法。
+  </div>
+
+  <div class="box danger">
+    <span class="box-t">违例后果：整个模块的复位值不确定</span>
+    一条数据路径的 setup 违例只影响一个寄存器的一拍；
+    但复位释放通常<strong>扇出到成百上千个寄存器</strong>，
+    recovery/removal 违例会让这些寄存器中的一部分成功复位、一部分没复位 ——
+    状态机从一个<strong>非法状态</strong>起步，后果是整个模块行为错乱且难以复现。<br><br>
+    这正是异步复位必须做<strong>同步释放</strong>（reset synchronizer：异步 assert、同步 de-assert）的根本原因。
+  </div>
+
+  <div class="box warn">
+    <span class="box-t">GLS 中容易被忽略</span>
+    这类违例集中出现在<strong>复位释放后的第一个时钟沿</strong>，
+    和上电初始化的一堆 X 混在一起，常被当成"初始化噪声"直接跳过。<br>
+    建议：GLS 中把复位释放时刻<strong>有意对齐到时钟沿附近</strong>跑一轮，
+    专门验证 reset synchronizer 是否真的起作用。
+  </div>
+
+  <h4>⑤ WIDTH：脉冲最小宽度</h4>
+<pre class="wave">
+   (WIDTH (posedge CK) (0.120::0.120))  → 高电平至少 120 ps
+   (WIDTH (negedge CK) (0.130::0.130))  → 低电平至少 130 ps
+
+   CK   ▁▁▁▁╱▔▔▔▔▔▔▔▔▔╲▁▁▁▁▁▁▁▁▁▁╱▔▔▔▔
+            │←─ 高 ──→│←── 低 ──→│
+            │  ≥120ps │  ≥130ps  │
+
+   违例情形：时钟被毛刺/门控切出一个窄脉冲
+   CK   ▁▁▁▁▁▁▁▁╱▔╲▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+                 │←│ 只有 30ps → WIDTH 违例
+                 触发器可能根本没被打开，或进入亚稳态</pre>
+  <div class="box warn">
+    <span class="box-t">WIDTH 违例多半来自时钟路径，而非数据路径</span>
+    常见根因：ICG 的 enable 在错误时刻翻转（见 9.8）、时钟 MUX 切换、
+    分频器输出毛刺。这类问题在纯 STA 中不一定暴露（STA 看的是理想时钟波形），
+    <strong>必须靠带 SDF 的 GLS 抓</strong>。
+  </div>
+
+  <h4>⑥ PERIOD：最小周期</h4>
+<pre class="wave">
+   (PERIOD (posedge CK) (0.400::0.400))  → 周期不得小于 400 ps（即 ≤2.5 GHz）
+
+   CK   ▁▁╱▔▔▔╲▁▁▁▁▁╱▔▔▔╲▁▁▁▁▁╱▔▔▔╲▁▁
+          ↑           ↑
+          │←─ 400ps ─→│  ← 相邻同向沿之间
+          │  以上     │</pre>
+  <p>与 <code>WIDTH</code> 的区别：<code>WIDTH</code> 管<strong>单个电平段</strong>的长度，
+  <code>PERIOD</code> 管<strong>两个同向沿</strong>之间的间隔。
+  常见于 memory / PLL / 高速 IP —— 这类硬核有自身的最高工作频率上限（见 9.9），
+  不随标准单元的 corner 缩放。</p>
+
+  <h4>⑦ SKEW：两信号到达的最大偏差</h4>
+<pre class="wave">
+   (SKEW (posedge CK1) (posedge CK2) (0.050::0.050))  → 偏差不得超过 50 ps
+
+   CK1  ▁▁▁▁▁▁▁╱▔▔▔▔▔▔▔▔▔▔▔▔▔
+                ┊
+                │←→│ 实际偏差
+                ┊  ┊
+   CK2  ▁▁▁▁▁▁▁▁▁▁▁╱▔▔▔▔▔▔▔▔▔
+                ┊  ┊
+                └──┴─ 必须 ≤ 50 ps</pre>
+  <p>用于差分接口、多时钟同步单元、以及某些需要两路控制信号同时到达的 IP。
+  标准单元库里较少见，常出现在 IO、SerDes、DDR PHY 的 SDF 中。</p>
+
+  <h4>⑧ NOCHANGE：以某信号的沿为基准的禁止变化窗口</h4>
+<pre class="wave">
+   (NOCHANGE (posedge WE) D (0.03::0.03) (0.03::0.03))
+              └─参考信号─┘ └数据┘ └ 之前 ┘ └ 之后 ┘
+
+   WE   ▁▁▁▁▁▁▁▁▁▁╱▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+                  ↑ 参考沿
+            │←30→│←30→│
+            ┊          ┊
+   D    ════╳▒▒▒▒▒▒▒▒▒▒╳════════════════
+            这段区间内 D 不得变化</pre>
+  <div class="box note">
+    <span class="box-t">和 SETUP/HOLD 的区别</span>
+    <code>SETUP</code>/<code>HOLD</code> 的参考是<strong>时钟</strong>；
+    <code>NOCHANGE</code> 的参考可以是<strong>任意控制信号</strong>（如写使能 <code>WE</code>）。<br>
+    语义上它等价于"以 WE 沿为中心的一个 setup+hold 组合"，
+    主要用于 memory 的地址/使能脚 —— 要求写使能翻转前后地址都必须稳定。
+  </div>
+
+  <h4>⑨ 一张图看全：DFF 上各检查的位置</h4>
+<pre class="wave">
+                         有效时钟沿
+                              ┊
+   CK   ▁▁▁▁╱▔▔▔▔▔▔▔▔╲▁▁▁▁▁╱▔┨▔▔▔▔╲▁▁▁▁▁▁▁
+            │← WIDTH →│      ┊
+            ↑                ┊
+            │←───── PERIOD ──┊──→│
+                             ┊
+                        ┌────┊────┐
+   D    ════════════════╳▒▒▒▒┊▒▒▒▒╳═════════
+                        │←Ts→┊←Th→│
+                        └ SETUPHOLD ┘
+                             ┊
+   RN   ▔▔▔▔▔▔▔╱▔▔▔▔▔▔▔▔▔▔▔▔▔┊▔▔▔▔▔▔▔▔▔▔▔▔▔
+               ↑             ┊
+               │←── Trec ───→│←Trem→│
+               释放沿          └ RECREM ┘
+                             ┊
+   Q    ═════════════════════┊══╳▒▒▒▒▒▒▒▒▒▒
+                             │←→│
+                             IOPATH (posedge CK) Q
+                             ↑ 这个属于 DELAY 段，不是 TIMINGCHECK</pre>
+
+  <div class="box key">
+    <span class="box-t">DELAY 与 TIMINGCHECK 的分工</span>
+    · <code>DELAY</code> 段（IOPATH）回答"信号<strong>什么时候</strong>到"→ 产生 arrival time<br>
+    · <code>TIMINGCHECK</code> 段回答"<strong>允许</strong>在什么时候到"→ 产生 required time<br>
+    两者相减就是 slack。SDF 把这两类信息都提供给仿真器，
+    仿真器在运行时逐沿比对，不满足就打印 <code>Timing violation</code>。
+  </div>
+
   <div class="box note">
     <span class="box-t">TIMINGCHECK 的三元组语义和延迟不同</span>
     <code>SETUP</code> / <code>HOLD</code> / <code>RECOVERY</code> / <code>REMOVAL</code> / <code>WIDTH</code> 等检查值的 min/max <strong>不代表快慢 corner</strong>，而是检查门限的取值范围；工程上通常三个填相同值（如上例 <code>(0.045::0.045)</code>）。
@@ -599,13 +861,96 @@ hold  slack = T_clk_launch + T_datapath_min - (T_clk_capture + T_hold)</pre>
   <p>同一份版图造出来的芯片，性能并不相同。<strong>Corner（工艺角）</strong> 就是把所有不确定性推到极端，取若干个"最坏组合"作为代表点来验证。只要所有 corner 都过，中间的连续空间就认为安全。</p>
 
   <div class="box note">
-    <span class="box-t">Corner 的三个独立维度 = PVT</span>
+    <span class="box-t">最核心的三个维度 = PVT</span>
     <strong>P (Process)</strong> 工艺偏差 —— 不可控，流片后固定，批次间/晶圆内差异<br>
     <strong>V (Voltage)</strong> 供电电压 —— 运行时波动（IR drop、负载跳变、LDO 精度）<br>
     <strong>T (Temperature)</strong> 结温 —— 运行时变化（环境温度 + 自发热）
   </div>
 
-  <h3>3.2 P：工艺角命名</h3>
+  <div class="box danger">
+    <span class="box-t">但"corner"远不止 PVT 三个维度</span>
+    PVT 只决定<strong>晶体管（标准单元库）</strong>的快慢。
+    一条真实时序路径的延迟还取决于<strong>连线</strong>、<strong>工作模式</strong>、
+    <strong>片内随机偏差</strong>、<strong>信号完整性</strong>、<strong>老化</strong>……<br>
+    签核时任何一个维度漏掉，都可能让其余维度的分析结果整体失效。
+  </div>
+
+  <h3>3.2 完整维度清单</h3>
+  <p>按"是否属于 PVT"分组，这是本章后续小节的总纲：</p>
+  <table>
+    <thead><tr>
+      <th style="width:52px">#</th><th style="width:150px">维度</th>
+      <th style="width:230px">取值 / 典型选项</th><th style="width:132px">影响什么</th>
+      <th style="width:90px">本章小节</th>
+    </tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="color:var(--accent2)"><strong>── PVT：决定晶体管快慢（库文件维度）──</strong></td></tr>
+      <tr>
+        <td>1</td><td><strong>P</strong> 工艺</td>
+        <td>TT / SS / FF / SF / FS</td>
+        <td>单元延迟、漏电</td><td>3.2</td>
+      </tr>
+      <tr>
+        <td>2</td><td><strong>V</strong> 电压</td>
+        <td>0.72 / 0.765 / 0.80 / 0.88 V …</td>
+        <td>单元延迟（影响最大）</td><td>3.3</td>
+      </tr>
+      <tr>
+        <td>3</td><td><strong>T</strong> 温度</td>
+        <td>−40 / 0 / 25 / 85 / 125 °C</td>
+        <td>单元延迟（可能反转）</td><td>3.4</td>
+      </tr>
+      <tr><td colspan="5" style="color:var(--warn)"><strong>── PVT 之外：同样必须枚举 ──</strong></td></tr>
+      <tr>
+        <td>4</td><td><strong>RC 寄生</strong><br>(Extraction)</td>
+        <td>cworst / cbest / rcworst / rcbest / typical<br>+ <code>_CCworst</code> / <code>_CCbest</code> 变体</td>
+        <td>连线延迟、耦合</td><td>3.5</td>
+      </tr>
+      <tr>
+        <td>5</td><td><strong>Mode</strong><br>工作模式</td>
+        <td>Functional / Scan Shift / At-speed /<br>MBIST / Low-power / Retention</td>
+        <td>约束本身（SDC）</td><td>3.8</td>
+      </tr>
+      <tr>
+        <td>6</td><td><strong>OCV</strong><br>片内偏差</td>
+        <td>flat derate / AOCV / POCV(SOCV)</td>
+        <td>同一 die 内单元间的随机差异</td><td><strong>3.11</strong></td>
+      </tr>
+      <tr>
+        <td>7</td><td><strong>Aging</strong><br>老化</td>
+        <td>fresh / 5 年 / 10 年（NBTI、HCI）</td>
+        <td>Vth 漂移 → 延迟随寿命变慢</td><td><strong>3.12</strong></td>
+      </tr>
+      <tr>
+        <td>8</td><td><strong>SI</strong><br>信号完整性</td>
+        <td>crosstalk delta delay、noise bump</td>
+        <td>邻线耦合造成的延迟增减</td><td><strong>3.13</strong></td>
+      </tr>
+      <tr>
+        <td>9</td><td><strong>时钟不确定性</strong></td>
+        <td>jitter、PLL 抖动、duty 偏差、<br><code>set_clock_uncertainty</code></td>
+        <td>直接吃掉 slack</td><td><strong>3.14</strong></td>
+      </tr>
+      <tr>
+        <td>10</td><td><strong>工艺选项</strong></td>
+        <td>Vt 种类（ULVT/LVT/SVT/HVT）、<br>沟道长度、body bias、金属层厚度</td>
+        <td>设计选择 / 额外 corner 枚举</td><td><strong>3.15</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="box key">
+    <span class="box-t">一个 corner 到底是什么</span>
+    签核意义上的"一个 corner"是一组<strong>完整的组合</strong>：
+<pre class="formula">corner = (P, V, T) × RC × Mode × OCV 设定 × Aging × SI 开关</pre>
+    PrimeTime / Innovus 里对应的三个概念：<br>
+    · <strong>library set</strong> —— 承载 P、V、T（维度 1–3）<br>
+    · <strong>delay corner</strong> —— library set + RC extraction corner + derate/OCV（1–4、6–7）<br>
+    · <strong>analysis view</strong> —— delay corner × <strong>constraint mode</strong>（再叠上维度 5）<br><br>
+    MMMC 的 "MC" 指的就是 delay corner，"MM" 指的就是 constraint mode。
+  </div>
+
+  <h3>3.3 P：工艺角命名</h3>
   <p>两个字母分别表示 <strong>NMOS</strong> 和 <strong>PMOS</strong> 的快慢：</p>
   <table>
     <thead><tr><th style="width:80px">代号</th><th style="width:110px">NMOS</th><th style="width:110px">PMOS</th><th>用途</th></tr></thead>
@@ -637,7 +982,7 @@ hold  slack = T_clk_launch + T_datapath_min - (T_clk_capture + T_hold)</pre>
   </table>
   <p>所以 <code>corner 库</code> 只覆盖 global，<strong>local 偏差必须靠 derate 补</strong>。先进节点改用 <strong>POCV（统计式，按 sigma 建模）</strong> 替代固定百分比 derate，否则过于悲观。</p>
 
-  <h3>3.3 V：电压维度</h3>
+  <h3>3.4 V：电压维度</h3>
   <table>
     <thead><tr><th style="width:120px">场景</th><th>取值</th><th>理由</th></tr></thead>
     <tbody>
@@ -659,7 +1004,7 @@ hold  slack = T_clk_launch + T_datapath_min - (T_clk_capture + T_hold)</pre>
     <li>DVFS 设计还要为<strong>每个工作点</strong>（如 0.9V/1GHz、0.7V/400MHz）各建一套 corner</li>
   </ul>
 
-  <h3>3.4 T：温度维度与温度反转</h3>
+  <h3>3.5 T：温度维度与温度反转</h3>
   <p>温度对延迟有<strong>两个反向作用</strong>：</p>
   <table>
     <thead><tr><th style="width:200px">机制</th><th>温度升高时</th><th>对延迟</th></tr></thead>
@@ -677,7 +1022,7 @@ hold  slack = T_clk_launch + T_datapath_min - (T_clk_capture + T_hold)</pre>
     <strong>→ 签核必须同时跑高温和低温两个 setup corner，不能只凭直觉选一个。</strong>
   </div>
 
-  <h3>3.5 RC Corner：互连寄生参数</h3>
+  <h3>3.6 RC Corner：互连寄生参数</h3>
   <p>延迟 = 单元延迟（器件 corner 决定）+ 互连延迟（<strong>RC corner 决定</strong>），两者是<strong>独立</strong>的维度。</p>
   <table>
     <thead><tr><th style="width:110px">RC Corner</th><th style="width:90px">金属宽度</th><th style="width:90px">介质厚度</th><th>R / C 特征</th><th>主要影响</th></tr></thead>
@@ -697,7 +1042,167 @@ hold  slack = T_clk_launch + T_datapath_min - (T_clk_capture + T_hold)</pre>
     所以 <strong>两个都要跑</strong>，不能只挑一个。先进节点还有 <code>cworst_CCworst</code> / <code>cbest_CCbest</code> 等区分<strong>耦合电容（coupling）</strong>的变体，用于 SI（信号完整性）分析。
   </div>
 
-  <h3>3.6 库文件命名解码</h3>
+  <h4>决策流程：RC corner 要跑哪几个</h4>
+  <p>RC 维度不能靠"感觉"省。下面是可以照着走的判定顺序。</p>
+
+  <div class="box danger">
+    <span class="box-t">先明确一条底线</span>
+    <strong>cworst 与 cbest 这一对（setup 最坏 + hold 最坏）永远不能省。</strong><br>
+    可以讨论的只是：要不要<strong>额外</strong>加 <code>rcworst</code> / <code>rcbest</code>，
+    以及要不要加 <code>_CC*</code> 耦合变体。
+  </div>
+
+  <h5>第 1 步：看工艺节点 —— 这是最硬的判据</h5>
+  <table>
+    <thead><tr>
+      <th style="width:120px">节点</th><th style="width:230px">必跑 RC corner</th><th>理由</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>≥ 65nm</strong></td>
+        <td><code>cworst</code> + <code>cbest</code></td>
+        <td>线宽大、R 小，延迟由 C 主导。<code>rcworst</code> 与 <code>cworst</code> 差异通常 &lt; 2%，可省</td>
+      </tr>
+      <tr>
+        <td><strong>40 / 28nm</strong></td>
+        <td>上面两个 + <code>rcworst</code></td>
+        <td>R 开始显著。局部互连上 <code>rcworst</code> 可能反超 <code>cworst</code></td>
+      </tr>
+      <tr>
+        <td><strong>16 / 14nm 及以下</strong></td>
+        <td><code>cworst_CCworst</code> / <code>cbest_CCbest</code><br>/ <code>rcworst_CCworst</code> / <code>rcbest_CCbest</code><br>（四个全跑）</td>
+        <td>线电阻急剧上升 + 耦合电容占比过半。<strong>没有讨论空间，PDK 文档直接强制</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="box key">
+    <span class="box-t">最优先的动作：查 PDK 文档</span>
+    Foundry 在 <strong>Design Rule / Signoff Guideline</strong> 里会直接给出
+    "本节点签核必须包含哪些 extraction corner"的清单。<br>
+    <strong>这个清单是硬要求，优先级高于任何内部分析。</strong>
+    流片前的 signoff review 会逐项核对，缺了会被打回。
+  </div>
+
+  <h5>第 2 步：看设计自身特征</h5>
+  <table>
+    <thead><tr><th style="width:230px">设计特征</th><th style="width:150px">倾向</th><th>原因</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>大面积 die、长距离总线、<br>跨 die 的 NoC / AXI 互连</td>
+        <td><code>cworst</code> 主导</td>
+        <td>长线容性负载占绝对多数</td>
+      </tr>
+      <tr>
+        <td>逻辑密集、路径级数多、<br>局部短线为主（CPU 核内部）</td>
+        <td><strong><code>rcworst</code> 可能反超</strong></td>
+        <td>每段线都短，但 via 栈多、R 累积快</td>
+      </tr>
+      <tr>
+        <td>高层厚金属做时钟主干</td>
+        <td>两者都要查</td>
+        <td>时钟树 skew 对 RC corner 极敏感，直接影响 hold</td>
+      </tr>
+      <tr>
+        <td>大量并行长走线<br>（DDR 数据总线、SerDes）</td>
+        <td>必须加 <code>_CC*</code> 变体</td>
+        <td>耦合电容主导，见 3.13 crosstalk</td>
+      </tr>
+      <tr>
+        <td>小模块、IP 级、单元数少</td>
+        <td>可只跑 <code>cworst</code>/<code>cbest</code></td>
+        <td>连线延迟占比低，差异淹没在单元延迟里</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h5>第 3 步：用数据验证（dominant corner 筛选）</h5>
+  <p>前两步是先验判断，这一步是<strong>实测</strong>。做法是在 floorplan 或首次 route 完成后跑一轮对比。</p>
+
+<pre><code># 对同一份网表，分别用不同 RC corner 做 extraction + STA
+foreach rc {cworst rcworst} {
+    read_parasitics  top_${rc}.spef
+    update_timing
+    report_timing -delay_type max -max_paths 2000 \
+                  -nosplit > rpt_setup_${rc}.rpt
+    report_global_timing > rpt_global_${rc}.rpt
+}</code></pre>
+
+  <p>然后比较两份报告的三个指标：</p>
+  <table>
+    <thead><tr><th style="width:140px">指标</th><th style="width:170px">含义</th><th>判定</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>WNS</strong><br>(Worst Negative Slack)</td>
+        <td>最差路径的 slack</td>
+        <td>两 corner 差值 &lt; <strong>2% 周期</strong> → 可只保留更差的那个</td>
+      </tr>
+      <tr>
+        <td><strong>TNS</strong><br>(Total Negative Slack)</td>
+        <td>所有违例 slack 之和</td>
+        <td>反映违例的<strong>广度</strong>。TNS 差异大说明两 corner 影响的是不同路径集合</td>
+      </tr>
+      <tr>
+        <td><strong>违例路径交集</strong></td>
+        <td>两份报告的 endpoint 列表</td>
+        <td><strong>最关键</strong>。交集小 → 两个 corner 各自主导不同路径，<strong>都必须保留</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="box warn">
+    <span class="box-t">只看 WNS 做决策是错的</span>
+    常见误区：看到 <code>rcworst</code> 的 WNS 比 <code>cworst</code> 好 20ps，就把 <code>rcworst</code> 砍掉。<br>
+    但 WNS 只代表<strong>一条</strong>路径。如果 <code>rcworst</code> 下有 500 条短线路径刚好压线，
+    而 <code>cworst</code> 下这些路径全是正 slack，砍掉 <code>rcworst</code> 就把这 500 条全放过了。<br>
+    <strong>必须看违例路径集合的交集，而不是单个数字。</strong>
+  </div>
+
+  <h5>第 4 步：按阶段分级 —— 实际工程中的折中</h5>
+  <table>
+    <thead><tr><th style="width:150px">阶段</th><th style="width:210px">RC corner 用法</th><th>目的</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>综合 / 布局</strong></td>
+        <td><code>typical</code> 或单个 <code>cworst</code></td>
+        <td>速度优先，趋势正确即可</td>
+      </tr>
+      <tr>
+        <td><strong>CTS / 布线</strong></td>
+        <td><code>cworst</code> + <code>cbest</code></td>
+        <td>覆盖 setup/hold 两个方向，让工具有正确的优化目标</td>
+      </tr>
+      <tr>
+        <td><strong>Route 后 ECO</strong></td>
+        <td>加入 <code>rcworst</code> / <code>rcbest</code></td>
+        <td>此时连线已确定，RC 差异才真实可信</td>
+      </tr>
+      <tr>
+        <td><strong>最终签核</strong></td>
+        <td><strong>PDK 要求的全部 corner</strong><br>+ PT SI 开启</td>
+        <td>不做任何省略，这是流片依据</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="box key">
+    <span class="box-t">一句话决策</span>
+    · <strong>签核阶段</strong>：不决策，照 PDK 文档全跑。省 corner 的风险是废片，不是省时间。<br>
+    · <strong>优化阶段</strong>：可以只跑 dominant corner 提速，但必须先用第 3 步的数据
+      证明被省掉的 corner 确实不主导任何路径集合。<br>
+    · <strong>判断依据的优先级</strong>：
+      PDK 强制清单 &gt; 实测违例路径交集 &gt; 节点经验 &gt; 设计特征直觉
+  </div>
+
+  <div class="box note">
+    <span class="box-t">与 GLS 的关系</span>
+    GLS 只需要<strong>各一个</strong>：setup 用最慢组合的 SDF（含 <code>cworst</code>），
+    hold 用最快组合的 SDF（含 <code>cbest</code>）。<br>
+    RC corner 的完整枚举是 <strong>STA 的事</strong>，不需要在 GLS 里重复 ——
+    因为 GLS 的目标是抓 X 传播和约束错误，不是精确签核（见 2.5 节）。
+  </div>
+
+  <h3>3.7 库文件命名解码</h3>
 <pre><code>ss g 0p765v  125c   _cworst_CCworst
 │  │   │       │          └─ RC corner + 耦合电容 corner
 │  │   │       └─ 温度 125°C
@@ -711,7 +1216,7 @@ hold  slack = T_clk_launch + T_datapath_min - (T_clk_capture + T_hold)</pre>
   tt0p75v_25c
   ssgnp...   gnp = global, n/p 分别建模</code></pre>
 
-  <h3>3.7 签核 Corner 清单示例</h3>
+  <h3>3.8 签核 Corner 清单示例</h3>
   <p>一个典型中低端 SoC 的 MMMC 签核矩阵（<strong>M</strong>ulti-<strong>M</strong>ode <strong>M</strong>ulti-<strong>C</strong>orner）：</p>
   <table>
     <thead><tr><th style="width:60px">#</th><th style="width:110px">检查</th><th style="width:60px">P</th><th style="width:80px">V</th><th style="width:70px">T</th><th style="width:130px">RC</th><th>说明</th></tr></thead>
@@ -734,7 +1239,7 @@ hold  slack = T_clk_launch + T_datapath_min - (T_clk_capture + T_hold)</pre>
     <strong>结论：hold 不能只跑 FF corner。</strong> 实际工程中 hold 的签核 corner 数量通常<strong>多于</strong> setup。
   </div>
 
-  <h3>3.8 Mode 维度（MMMC 的另一半）</h3>
+  <h3>3.9 Mode 维度（MMMC 的另一半）</h3>
   <p>同一个 corner 下还要跑多个<strong>工作模式</strong>，每个 mode 有独立的 SDC：</p>
   <table>
     <thead><tr><th style="width:150px">Mode</th><th>特点</th><th>时序关注点</th></tr></thead>
@@ -748,7 +1253,7 @@ hold  slack = T_clk_launch + T_datapath_min - (T_clk_capture + T_hold)</pre>
   </table>
   <p><strong>总 scenario 数 = Mode × Corner</strong>，容易爆炸到几十上百个，所以实际会做 <strong>scenario reduction</strong>（挑主导 corner），但 reduction 的依据必须有数据支撑。</p>
 
-  <h3>3.9 Corner 与门级仿真的映射</h3>
+  <h3>3.10 Corner 与门级仿真的映射</h3>
 <pre class="formula">┌─ setup GLS ───────────────────────────────────────────┐
 │  SDF        : top_ss_0p81v_125c_cworst.sdf            │
 │  延迟取值   : +maxdelays  /  "MAXIMUM"                 │
@@ -772,7 +1277,227 @@ hold  slack = T_clk_launch + T_datapath_min - (T_clk_capture + T_hold)</pre>
     对关键接口（DDR / SerDes / 跨时钟域）可以再挑 SF/FS 补跑。
   </div>
 
-  <h3>3.10 常见 Corner 相关错误</h3>
+  <h3>3.11 OCV / AOCV / POCV：片内随机偏差</h3>
+  <p>PVT corner 描述的是<strong>整颗 die 的平均状态</strong>（global / die-to-die）。
+  但同一颗 die 上，相邻两个单元也不会完全一样 —— 这叫
+  <strong>OCV（On-Chip Variation，片内偏差）</strong>。</p>
+
+  <div class="box key">
+    <span class="box-t">为什么 PVT corner 不够</span>
+    SS corner 的含义是"整颗芯片都慢"。可是 setup 检查需要的最坏情况是
+    <strong>数据路径慢、而捕获时钟路径快</strong> —— 这两件事发生在<strong>同一颗 die 上</strong>。<br>
+    单靠 PVT corner 无法表达"一颗 die 内部，这边慢那边快"，所以必须额外加 OCV。
+  </div>
+
+  <table>
+    <thead><tr><th style="width:120px">方法</th><th style="width:230px">做法</th><th>特点</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>flat derate</strong></td>
+        <td><code>set_timing_derate -late 1.05 -early 0.95</code><br>所有单元统一乘一个系数</td>
+        <td>最简单最悲观。路径越长累积越离谱（实际上级数越多，随机偏差越相互抵消）</td>
+      </tr>
+      <tr>
+        <td><strong>AOCV</strong><br>(Advanced)</td>
+        <td>derate 系数是 <strong>路径深度 (depth)</strong> 与 <strong>物理距离 (distance)</strong> 的查找表</td>
+        <td>级数多 → derate 变小，符合统计规律。比 flat 省 5~15% 悲观度</td>
+      </tr>
+      <tr>
+        <td><strong>POCV / SOCV</strong><br>(Parametric/Statistical)</td>
+        <td>每个单元延迟带一个 <strong>σ（标准差）</strong>，沿路径做<strong>平方和开方</strong>而非线性累加</td>
+        <td>先进节点（16nm 以下）主流。需要 LVF (Liberty Variation Format) 库支持</td>
+      </tr>
+    </tbody>
+  </table>
+
+<pre class="formula">三种方法下，10 级逻辑路径的悲观度对比（示意）：
+
+  flat derate  ：delay × 1.05 × 10 级  ──► 悲观度线性累加，最大
+  AOCV         ：delay × 1.02（查表得 10 级时系数已回落）
+  POCV         ：σ_total = √(σ1² + σ2² + ... + σ10²)  ──► 随 √N 增长，最接近真实</pre>
+
+  <div class="box warn">
+    <span class="box-t">OCV 与 SDF / GLS 的关系</span>
+    <code>write_sdf</code> 导出时，<strong>derate 已经被乘进延迟数值里</strong>，
+    SDF 本身没有任何字段记录 OCV 设定。<br>
+    所以：拿到一份 SDF，<strong>无法从文件内容判断它含不含 derate</strong> ——
+    必须回去查 PT 脚本里的 <code>set_timing_derate</code>。<br><br>
+    更麻烦的是：OCV 对 launch / capture 时钟路径施加的是<strong>相反方向</strong>的 derate，
+    而一份 SDF 对同一个时钟 buffer 只能写一个延迟值。
+    这是 GLS 天然无法完整复现 STA 结果的根本原因之一（见 2.5 节）。
+  </div>
+
+  <h3>3.12 Aging：老化维度</h3>
+  <p>芯片不是出厂时最慢。随着使用年限增加，晶体管 Vth 会漂移，延迟<strong>逐年变大</strong>。</p>
+
+  <table>
+    <thead><tr><th style="width:110px">机制</th><th style="width:200px">全称</th><th>影响</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>NBTI</strong></td>
+        <td>Negative Bias Temperature Instability</td>
+        <td>PMOS 长期处于导通态 → |Vth| 增大 → 变慢。<strong>主要老化机制</strong></td>
+      </tr>
+      <tr>
+        <td><strong>PBTI</strong></td>
+        <td>Positive BTI</td>
+        <td>NMOS 版本，high-k 工艺下变得显著</td>
+      </tr>
+      <tr>
+        <td><strong>HCI</strong></td>
+        <td>Hot Carrier Injection</td>
+        <td>高频翻转节点的载流子撞击损伤栅氧</td>
+      </tr>
+      <tr>
+        <td><strong>EM</strong></td>
+        <td>Electromigration</td>
+        <td>金属线逐渐变细 → 电阻增大 → 连线延迟变大（也可能直接断路）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="box note">
+    <span class="box-t">在流程中如何体现</span>
+    · 车规 / 工业级芯片必须签 <strong>aged corner</strong>（厂商提供老化后的 <code>.lib</code>，或给一个 aging derate）<br>
+    · 消费类产品常用简化做法：在 SS corner 上额外加 2~5% derate<br>
+    · 典型要求：<strong>10 年 @ 125°C 后仍满足时序</strong><br><br>
+    老化<strong>只会让电路变慢</strong>，所以主要影响 setup。
+    但注意：clock tree 也会老化，两条分支老化程度不同 → <strong>hold 也会受影响</strong>。
+  </div>
+
+  <h3>3.13 SI：信号完整性（crosstalk）</h3>
+  <p>相邻走线之间存在耦合电容。邻线（aggressor）翻转时，会把受害线（victim）的延迟
+  <strong>推快或拖慢</strong>。</p>
+
+<pre class="wave">   aggressor ─────┐                  耦合电容 Cc
+                  │  ╎╎╎╎╎╎╎╎╎╎╎╎╎╎  ← 并行走线段
+   victim    ─────┘
+
+   情形 1：同向翻转（0→1 与 0→1）
+       → 互相"帮推一把" → victim <em>变快</em>  → 对 hold 不利
+
+   情形 2：反向翻转（0→1 与 1→0）
+       → 互相拖拽         → victim <em>变慢</em>  → 对 setup 不利
+
+   情形 3：aggressor 不动，victim 翻转
+       → Cc 变成纯负载   → victim 变慢（已含在普通 extraction 里）</pre>
+
+  <div class="box warn">
+    <span class="box-t">与 RC corner 的区别与联系</span>
+    3.5 节提到的 <code>cworst_CCworst</code> 中，后半截 <code>CCworst</code> 指的就是
+    <strong>耦合电容取最坏</strong>。<br>
+    但 RC corner 只决定 <strong>Cc 的大小</strong>；
+    真正算出"快了多少 / 慢了多少"（<strong>delta delay</strong>）
+    需要 PrimeTime SI 做<strong>时序窗口分析</strong> ——
+    只有当 aggressor 与 victim 的翻转时间窗口<strong>真的重叠</strong>时才计入。
+  </div>
+
+  <div class="box danger">
+    <span class="box-t">SDF 无法表达 crosstalk</span>
+    delta delay 依赖"哪些邻线在何时翻转"，是<strong>动态、数据相关</strong>的。
+    SDF 只能写一个静态数值。<br>
+    <code>write_sdf</code> 导出时，PT SI 算出的 delta delay 会被
+    <strong>固化进 INTERCONNECT 数值</strong> —— 等于把"最坏情况的邻线活动"
+    永久假设成一直发生。这是 SDF 相比 STA 的又一处精度损失。
+  </div>
+
+  <h3>3.14 时钟不确定性（jitter / duty / uncertainty）</h3>
+  <p>前面所有分析都假设时钟源是<strong>理想周期</strong>。实际 PLL 输出存在抖动。</p>
+
+  <table>
+    <thead><tr><th style="width:150px">来源</th><th style="width:170px">性质</th><th>对时序的影响</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>PLL jitter</strong></td>
+        <td>周期随机抖动（period jitter）</td>
+        <td>某一拍周期偶然变短 → 直接从 setup slack 里扣掉</td>
+      </tr>
+      <tr>
+        <td><strong>duty cycle 偏差</strong></td>
+        <td>高低电平不等长</td>
+        <td>影响半周期路径、DDR 接口、latch 的 time borrowing</td>
+      </tr>
+      <tr>
+        <td><strong>电源噪声引起的抖动</strong></td>
+        <td>供电波动传导到时钟树</td>
+        <td>与 IR drop 分析耦合</td>
+      </tr>
+      <tr>
+        <td><strong>CTS 后残余 skew</strong></td>
+        <td>工具无法完全消除的确定性偏差</td>
+        <td>已含在 <code>T_clk_launch</code> / <code>T_clk_capture</code> 的差里</td>
+      </tr>
+    </tbody>
+  </table>
+
+<pre class="formula">在 SDC 中统一用 uncertainty 表达：
+
+  set_clock_uncertainty -setup 0.050 [get_clocks clk]
+  set_clock_uncertainty -hold  0.020 [get_clocks clk]
+
+它直接从第 4、5 章的 slack 公式里扣除：
+
+  setup slack = T_period + T_clk_capture
+              − (T_clk_launch + T_datapath_max + T_setup)
+              − <em>T_uncertainty_setup</em>        ← 新增这一项
+
+  hold  slack = T_clk_launch + T_datapath_min
+              − (T_clk_capture + T_hold)
+              − <em>T_uncertainty_hold</em>         ← 新增这一项</pre>
+
+  <div class="box note">
+    <span class="box-t">为什么 hold 的 uncertainty 比 setup 小</span>
+    hold 是<strong>同一个沿</strong>的检查（第 5 章），
+    period jitter 对 launch 和 capture 的影响<strong>同向、相互抵消</strong>，
+    所以只需覆盖 skew 的随机部分。<br>
+    setup 跨一拍，必须额外承担整个 period jitter。
+  </div>
+
+  <h3>3.15 工艺选项维度</h3>
+  <p>同一个工艺节点下，还有若干"选项"会生成<strong>不同的库</strong>，严格说也是 corner 维度：</p>
+  <table>
+    <thead><tr><th style="width:150px">选项</th><th style="width:220px">取值</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Vt 种类</strong></td>
+        <td>ULVT / LVT / SVT / HVT</td>
+        <td>阈值电压不同。ULVT 最快但漏电最大。混用时各自有独立的 <code>.lib</code></td>
+      </tr>
+      <tr>
+        <td><strong>单元高度</strong></td>
+        <td>7T / 9T / 12T（track 数）</td>
+        <td>高度越大驱动越强、面积越大。见 1.5 节 <code>7T</code> 的含义</td>
+      </tr>
+      <tr>
+        <td><strong>沟道长度</strong></td>
+        <td>如 <code>40L</code> / <code>P</code> 后缀</td>
+        <td>长沟道漏电小、速度慢，常用于非关键路径</td>
+      </tr>
+      <tr>
+        <td><strong>Body bias</strong></td>
+        <td>FBB / RBB（正偏 / 反偏）</td>
+        <td>FD-SOI 工艺可动态调 Vth，等于增加一个运行时维度</td>
+      </tr>
+      <tr>
+        <td><strong>金属栈</strong></td>
+        <td>如 <code>1P9M</code>、厚铜顶层方案</td>
+        <td>决定 RC extraction 的 ITF/技术文件，间接影响 RC corner</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="box key">
+    <span class="box-t">维度爆炸与现实取舍</span>
+    若每个维度都完全枚举，corner 数量是<strong>乘法增长</strong>的：
+<pre class="formula">5 (P) × 3 (V) × 3 (T) × 5 (RC) × 5 (Mode) × 2 (Aging) = 2250 个 view</pre>
+    这跑不完。实际做法是 <strong>dominant corner 筛选</strong>：<br>
+    · 先用少量 view 做 <code>report_timing</code>，找出哪些 view 真正主导违例<br>
+    · 只保留这些 dominant view 做完整签核（典型保留 <strong>8~30 个</strong>，见 3.8 节清单）<br>
+    · Innovus/PT 的 <code>-view</code> 机制支持部分 view 只做 ECO 不做签核<br><br>
+    <strong>但筛选必须有依据</strong>。3.16 表格里的每一条错误，根源都是"凭感觉省掉了某个 view"。
+  </div>
+
+  <h3>3.16 常见 Corner 相关错误</h3>
   <table>
     <thead><tr><th style="width:230px">错误</th><th>后果</th></tr></thead>
     <tbody>
@@ -782,8 +1507,12 @@ hold  slack = T_clk_launch + T_datapath_min - (T_clk_capture + T_hold)</pre>
       <tr><td>只跑 cworst 不跑 rcworst</td><td>漏掉短线 RC 乘积主导的路径</td></tr>
       <tr><td>电压 corner 未覆盖实际 IR drop</td><td>PI 分析结果一出来，整个 setup 签核作废</td></tr>
       <tr><td>忘记跑 SF / FS</td><td>时钟占空比、duty-critical 接口（DDR）失效</td></tr>
-      <tr><td>derate / OCV 未配置</td><td>只覆盖 global 偏差，within-die 偏差裸奔</td></tr>
+      <tr><td>derate / OCV 未配置</td><td>只覆盖 global 偏差，within-die 偏差裸奔（3.11）</td></tr>
       <tr><td>多电压域未做交叉组合</td><td>level shifter 两侧极端组合下时序失效</td></tr>
+      <tr><td>车规芯片未签 aged corner</td><td>出厂时序 PASS，用 3 年后超频率规格失效（3.12）</td></tr>
+      <tr><td>未开 PT SI / 未用 CCworst 库</td><td>漏掉 crosstalk delta delay，长并行线路径实测比签核慢（3.13）</td></tr>
+      <tr><td><code>set_clock_uncertainty</code> 忘设或设太小</td><td>PLL jitter 未被覆盖，高频下随机失效（3.14）</td></tr>
+      <tr><td>混用多种 Vt 库但只加载了一部分</td><td>部分单元取不到时序 → <code>.lib</code> 查找失败或延迟被当成 0（3.15）</td></tr>
     </tbody>
   </table>
 </section>
@@ -812,7 +1541,80 @@ hold  slack = T_clk_launch + T_datapath_min - (T_clk_capture + T_hold)</pre>
     <code>T_datapath</code> 已包含 FF1 的 <code>CK→Q</code>、组合逻辑延迟、以及走线延迟。
   </div>
 
-  <h3>4.2 波形</h3>
+  <h3>4.2 五个量的定义与来源</h3>
+  <p>公式里每一项都有明确的物理含义、明确的 SDF 出处、明确的 corner 取法。
+  搞不清这张表，公式就只是五个符号。</p>
+
+  <table>
+    <thead><tr>
+      <th style="width:150px">符号</th><th style="width:230px">物理含义</th>
+      <th style="width:230px">在 SDF 中的来源</th><th>取 min 还是 max</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><code>T_clk_launch</code></td>
+        <td>时钟从<strong>时钟源</strong>传到 <strong>FF1.CK</strong> 所用的时间<br>（发射端时钟树延迟）</td>
+        <td>时钟树上一串 <code>CKBUF</code>/<code>CKINV</code>/<code>ICG</code> 的 <code>IOPATH</code> + 之间的 <code>INTERCONNECT</code> 逐级累加</td>
+        <td>setup 下取 <span class="tag max">max</span>（late）<br>—— 发射越晚越危险</td>
+      </tr>
+      <tr>
+        <td><code>T_clk_capture</code></td>
+        <td>时钟从<strong>同一个时钟源</strong>传到 <strong>FF2.CK</strong> 所用的时间<br>（捕获端时钟树延迟）</td>
+        <td>同上，但走的是通往 FF2 的那条时钟树分支</td>
+        <td>setup 下取 <span class="tag min">min</span>（early）<br>—— 捕获越早越危险</td>
+      </tr>
+      <tr>
+        <td><code>T_datapath_max</code></td>
+        <td>FF1.CK 到达后，数据经 <code>CK→Q</code> + 组合逻辑 + 走线，到达 FF2.D 的<strong>最长</strong>时间</td>
+        <td>FF1 的 <code>(IOPATH (posedge CK) Q ...)</code><br>+ 链路上每个门的 <code>IOPATH</code><br>+ 每段 <code>INTERCONNECT</code></td>
+        <td><span class="tag max">max</span><br>—— 定义即最长路径</td>
+      </tr>
+      <tr>
+        <td><code>T_setup</code></td>
+        <td>FF2 要求数据在捕获沿<strong>之前</strong>稳定的最小时间（门限值，不是延迟）</td>
+        <td>FF2 的 <code>(SETUPHOLD D (posedge CK) (Ts) (Th))</code> 中的<strong>第一个</strong>值</td>
+        <td>检查门限，<strong>与 corner 无关</strong><br>通常三元组三值相同</td>
+      </tr>
+      <tr>
+        <td><code>T_period</code></td>
+        <td>时钟周期，即 edge N 到 edge N+1 的间隔</td>
+        <td><strong>不在 SDF 里</strong>，来自 SDC 的 <code>create_clock</code> / TB 的时钟激励</td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="box key">
+    <span class="box-t">为什么 launch 取 max 而 capture 取 min</span>
+    这不是两个独立的选择，而是<strong>同一个悲观化策略</strong>的两面：<br>
+    · 发射端慢（<code>T_clk_launch</code> 大）→ 数据出发得晚 → arrival time 变大<br>
+    · 捕获端快（<code>T_clk_capture</code> 小）→ 截止时刻提前 → required time 变小<br><br>
+    两者<strong>同时朝最坏方向取</strong>，slack 被压到最小。这叫 <strong>late launch / early capture</strong>，
+    是 setup 检查的标准悲观组合（第 7 章 PT 报告里 0.52 vs 0.48 就是这个）。
+  </div>
+
+  <div class="box warn">
+    <span class="box-t">T_setup 与前四项性质不同</span>
+    <code>T_clk_launch</code> / <code>T_clk_capture</code> / <code>T_datapath_max</code> 都是
+    <strong>延迟</strong>（signal 走了多久，来自 SDF 的 <code>DELAY</code> 段）；<br>
+    <code>T_setup</code> 是<strong>门限</strong>（单元要求多久，来自 SDF 的 <code>TIMINGCHECK</code> 段）。<br>
+    这正是 1.7 节 ⑨ 后面那段"DELAY 产生 arrival time、TIMINGCHECK 产生 required time"的分工。
+  </div>
+
+  <h4>共用时钟树的部分不参与竞争</h4>
+<pre class="formula">clk 源 ──► [共用段 BUF] ──┬──► [分支 A] ──► FF1.CK
+                          │
+                          └──► [分支 B] ──► FF2.CK
+
+  T_clk_launch  = 共用段 + 分支 A
+  T_clk_capture = 共用段 + 分支 B
+
+  skew = T_clk_capture − T_clk_launch = 分支 B − 分支 A
+         └─ 共用段被抵消，不影响 skew ─┘</pre>
+  <p>所以 CTS 的目标不是把时钟树做短，而是把<strong>两个分支做得一样长</strong>。
+  共用段再长，对 setup/hold 的 slack 也不产生净影响（只影响 latency 与 I/O 时序）。</p>
+
+  <h3>4.3 波形</h3>
 <pre class="wave">时间 ─────────────────────────────────────────────────────────────────►
       0                                              T_period
       │                                                 │
@@ -842,7 +1644,7 @@ FF2.CK│__________________________________________│‾‾‾│______________
                                                   │   (required time)
                                       └───slack───┘</pre>
 
-  <h3>4.3 不等式推导</h3>
+  <h3>4.4 不等式推导</h3>
   <p><strong>要求</strong>：数据必须在捕获沿<strong>之前至少 T_setup</strong> 就已稳定。</p>
 <pre class="formula">   T_clk_launch + T_datapath_max + T_setup  ≤  T_period + T_clk_capture
    └──────────── data arrival + setup 要求 ─┘     └─ capture edge 到达时刻 ─┘
@@ -852,7 +1654,128 @@ FF2.CK│__________________________________________│‾‾‾│______________
    setup slack = (T_period + T_clk_capture) - (T_clk_launch + T_datapath_max + T_setup)
                  └──── required time ─────┘   └────────── arrival time ──────────┘</pre>
 
-  <h3>4.4 三个直觉</h3>
+  <h4>为什么捕获沿到达时刻是 T_period + T_clk_capture</h4>
+
+  <div class="box key">
+    <span class="box-t">一切的前提：公共时间原点</span>
+    STA 把<strong>时钟源发出 edge N 的那一刻定义为 t = 0</strong>。
+    之后所有事件的时刻，都是从这个<strong>同一个原点</strong>量出来的绝对时间。<br>
+    只有统一了原点，arrival 和 required 才能直接相减 —— 这是公式能成立的基础。
+  </div>
+
+  <p>于是捕获沿的时刻可以分两步推出来：</p>
+<pre class="formula">第 1 步：捕获沿在<em>时钟源</em>上何时发出？
+
+   edge N   在时钟源发出 ──► t = 0
+   edge N+1 在时钟源发出 ──► t = T_period        ← 周期的定义
+
+   setup 检查用的是 edge N+1，所以源端时刻 = T_period
+
+
+第 2 步：它从时钟源走到 FF2.CK 要多久？
+
+   走的是通往 FF2 的那条时钟树分支 ──► T_clk_capture
+
+
+两步相加：
+
+   捕获沿到达 FF2.CK 的时刻 = T_period + T_clk_capture
+                              └──┬──┘   └──────┬──────┘
+                          源端发出时刻      树上传播时间</pre>
+
+  <div class="box note">
+    <span class="box-t">同理看 arrival 侧，结构完全对称</span>
+<pre class="formula">发射沿在源端发出     ──► t = 0
+发射沿到达 FF1.CK    ──► t = 0 + T_clk_launch
+数据到达 FF2.D       ──► t = T_clk_launch + T_datapath_max</pre>
+    两侧都是"<strong>源端发出时刻 + 传播时间</strong>"。
+    唯一的差别只是：arrival 侧用的是 edge N（源端 t=0），required 侧用的是 edge N+1（源端 t=T_period）。
+  </div>
+
+  <h4>T_period 从哪来：因为 setup 是"跨一拍"的检查</h4>
+<pre class="wave">时钟源：
+          edge N                      edge N+1
+   t=0 ─────┬──────── T_period ──────────┬────────────────►
+            │                            │
+            │ 用来<em>发射</em>数据             │ 用来<em>捕获</em>数据
+            │ (launch)                   │ (capture)
+            ▼                            ▼
+       +T_clk_launch                +T_clk_capture
+            │                            │
+            ▼                            ▼
+       FF1.CK 收到沿                 FF2.CK 收到沿
+       = T_clk_launch               = T_period + T_clk_capture
+
+   ◄════════ 数据有整整一个周期的时间可以跑 ════════►</pre>
+
+  <div class="box key">
+    <span class="box-t">这就是 setup 与 hold 唯一的结构性差别</span>
+    两个公式的 required time 都是"源端发出时刻 + T_clk_capture"，
+    区别只在<strong>捕获用的是哪一个沿</strong>：<br><br>
+    · <strong>setup</strong>：launch 用 edge N，capture 用 <strong>edge N+1</strong><br>
+    &nbsp;&nbsp;→ capture 沿源端时刻 = <code>T_period</code>
+    → 到达 FF2.CK = <code>T_period + T_clk_capture</code><br><br>
+    · <strong>hold</strong>：launch 用 edge N，capture 用<strong>同一个 edge N</strong><br>
+    &nbsp;&nbsp;→ capture 沿源端时刻 = <code>0</code>
+    → 到达 FF2.CK = <code>0 + T_clk_capture</code> = <code>T_clk_capture</code><br><br>
+    <strong>hold 公式里没有 T_period，就是因为那个 0。</strong>
+    把 setup 公式中的 <code>T_period</code> 换成 <code>0</code>、把 <code>max</code> 换成 <code>min</code>、
+    把 <code>T_setup</code> 换成 <code>−T_hold</code>，就得到了 hold 公式（详见第 5 章）。
+  </div>
+
+  <div class="box warn">
+    <span class="box-t">推论：为什么降频能救 setup，但救不了 hold</span>
+    <code>T_period</code> 只出现在 setup 的 required time 里。
+    周期加大 → 捕获沿整体往后挪 → 数据多了喘息时间 → setup slack 线性变好。<br><br>
+    hold 的两端都挂在<strong>同一个沿</strong>上，<code>T_period</code> 根本不出现 ——
+    时钟放慢多少倍，hold slack 一点都不变。<br>
+    <strong>这就是 hold 违例流片后无法用降频抢救的数学原因。</strong>
+  </div>
+
+  <div class="box danger">
+    <span class="box-t">两个常见误解</span>
+    ✗ <em>"T_period + T_clk_capture 是因为数据要走一个周期再加时钟树延迟"</em><br>
+    → 错。<code>T_period</code> 和 <code>T_clk_capture</code> 都在<strong>时钟</strong>侧，
+    和数据路径没有任何关系。数据路径只贡献 <code>T_datapath_max</code>。<br><br>
+    ✗ <em>"多周期路径就把 T_clk_capture 乘 N"</em><br>
+    → 错。<code>set_multicycle_path N</code> 改的是<strong>捕获沿的选取</strong>，
+    required time 变成 <code>N × T_period + T_clk_capture</code>；
+    时钟树延迟 <code>T_clk_capture</code> 始终只算<strong>一次</strong>。
+  </div>
+
+  <h3>4.5 代入数值走一遍</h3>
+  <p>假设 1 GHz 时钟（<code>T_period = 1.000 ns</code>），SDF 中查到：</p>
+<pre class="formula">T_clk_launch   = 0.520 ns   ← 时钟树到 FF1.CK，取 late
+T_clk_capture  = 0.480 ns   ← 时钟树到 FF2.CK，取 early
+T_datapath_max = 0.420 ns   ← FF1 CK→Q (0.085) + 组合逻辑 + 走线
+T_setup        = 0.045 ns   ← FF2 的 SETUPHOLD 第一个值
+T_period       = 1.000 ns   ← 来自 SDC
+
+arrival  = 0.520 + 0.420          = 0.940 ns   ← 数据到达 FF2.D 的时刻
+required = 1.000 + 0.480 − 0.045  = 1.435 ns   ← 最晚允许到达的时刻
+
+slack    = 1.435 − 0.940          = +0.495 ns  ✓ 满足</pre>
+
+  <div class="box note">
+    <span class="box-t">两种等价的写法</span>
+    把 <code>T_setup</code> 放在左边（加进 arrival）还是放在右边（从 required 里减去），
+    结果完全一样 —— 它只是把"截止线"往前挪了 <code>T_setup</code>。<br>
+    PrimeTime 报告采用的是<strong>右边</strong>的形式：先算出 capture edge 时刻，
+    再在 <code>library setup time</code> 一行减去 <code>T_setup</code>，得到
+    <code>data required time</code>。
+  </div>
+
+  <div class="box warn">
+    <span class="box-t">slack 对各项的敏感度</span>
+    从公式可直接读出每一项变化 1 ps 对 slack 的影响：<br>
+    · <code>T_period</code> ↑ → slack ↑（<strong>降频能救 setup</strong>）<br>
+    · <code>T_clk_capture</code> ↑ → slack ↑（捕获端更晚到，等于多给时间）<br>
+    · <code>T_clk_launch</code> ↑ → slack ↓（发射端更晚到，数据出发就迟了）<br>
+    · <code>T_datapath_max</code> ↑ → slack ↓（逻辑级数越多越危险）<br>
+    · <code>T_setup</code> ↑ → slack ↓（换驱动更大但 setup 更大的 FF 不一定划算）
+  </div>
+
+  <h3>4.6 三个直觉</h3>
   <ul>
     <li>公式含 <code>T_period</code> → <strong>setup 与频率有关</strong>。降频使 <code>T_period</code> 变大、slack 变大，所以 setup 违例能靠降频抢救。</li>
     <li>用 <code>T_datapath_max</code> → 最慢路径最危险 → 对应 <span class="tag max">max</span> <strong>SS / 低压 / 高温 + max SDF</strong>。</li>
@@ -1237,7 +2160,7 @@ write_sdf -delay_type max top_max.sdf</code></pre>
   <ul>
     <li>比普通 DFF 多出 <code>SI</code>（scan in）与 <code>SE</code>（scan enable）两组 SETUPHOLD</li>
     <li><code>SE</code> 的 setup 通常<strong>远大于</strong> D —— 它要在时钟沿前稳定足够久以切换数据通路</li>
-    <li>功能仿真时 <code>SE=0</code>，<code>SI</code> 路径不激活；<strong>但 scan shift 模式的 GLS 必须单独跑</strong>（对应第 3.8 节的 Mode 维度）</li>
+    <li>功能仿真时 <code>SE=0</code>，<code>SI</code> 路径不激活；<strong>但 scan shift 模式的 GLS 必须单独跑</strong>（对应第 3.9 节的 Mode 维度）</li>
   </ul>
 
   <h3>9.7 锁存器（LATCH）</h3>
@@ -1317,7 +2240,7 @@ write_sdf -delay_type max top_max.sdf</code></pre>
   <ul>
     <li><code>I→PAD</code> 输出方向、<code>PAD→C</code> 输入方向、<code>OEN→PAD</code> 三态控制</li>
     <li>延迟是 ns 级（驱动大负载 + ESD 结构）</li>
-    <li>IO 单元跨<strong>两个电压域</strong>（core 1.8V / IO 3.3V），SDF 头部的 <code>VOLTAGE</code> 只写了一个，IO 的时序实际由 IO 库单独决定 —— 见第 3.3 节多电压域</li>
+    <li>IO 单元跨<strong>两个电压域</strong>（core 1.8V / IO 3.3V），SDF 头部的 <code>VOLTAGE</code> 只写了一个，IO 的时序实际由 IO 库单独决定 —— 见第 3.4 节多电压域</li>
   </ul>
 
   <h3>9.11 互连延迟（INTERCONNECT，不属于任何 CELL）</h3>
@@ -1332,7 +2255,7 @@ write_sdf -delay_type max top_max.sdf</code></pre>
     <span class="box-t">为什么它挂在顶层 CELL 下</span>
     <code>INTERCONNECT</code> 描述的是<strong>两个 pin 之间的连线延迟</strong>，不属于某个单元内部，
     所以统一写在 <code>(CELLTYPE "top") (INSTANCE)</code> 这个空实例块里。
-    同一驱动点到不同负载的值不同（0.008 vs 0.015）—— 这就是 RC corner（第 3.5 节）影响最大的地方。
+    同一驱动点到不同负载的值不同（0.008 vs 0.015）—— 这就是 RC corner（第 3.6 节）影响最大的地方。
   </div>
 
   <h3>9.12 Spare Cell / Tie Cell / Filler 等"不参与功能"的单元</h3>
