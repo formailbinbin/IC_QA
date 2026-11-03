@@ -1039,8 +1039,210 @@ hold  slack = T_clk_launch + T_datapath_min - (T_clk_capture + T_hold)</pre>
     <span class="box-t">cworst 和 rcworst 哪个更差？取决于线长</span>
     <strong>长线</strong>（全局走线、时钟主干）：容性负载主导 → <code>cworst</code> 更差<br>
     <strong>短线 / 中等线</strong>（局部互连、高层 via 栈多）：电阻影响显著 → <code>rcworst</code> 更差<br>
-    所以 <strong>两个都要跑</strong>，不能只挑一个。先进节点还有 <code>cworst_CCworst</code> / <code>cbest_CCbest</code> 等区分<strong>耦合电容（coupling）</strong>的变体，用于 SI（信号完整性）分析。
+    所以 <strong>两个都要跑</strong>，不能只挑一个。先进节点还有 <code>cworst_CCworst</code> / <code>cbest_CCbest</code> 等区分<strong>耦合电容（coupling）</strong>的变体，见下一小节。
   </div>
+
+  <h4>耦合电容（Coupling Capacitance）与 CC corner</h4>
+
+  <h5>① 总电容的分解：对地电容 + 耦合电容</h5>
+  <p>一根信号线的负载电容并不是一个整体，提参（extraction）时被拆成两部分：</p>
+  <pre class="formula"><code>C_total = C_ground + Σ C_coupling
+
+            ┌──────────────────────────────┐
+            │          上层金属 Mn+1        │   ← 也可能是邻层走线
+            └──────────────────────────────┘
+                   │ C_ground(up)
+   ┌─────────┐     ▼      ┌─────────┐      ┌─────────┐
+   │ 邻线 A  │◄── Cc1 ───►│ victim  │◄─ Cc2 ─►│ 邻线 B  │   同层左右邻线
+   └─────────┘            └─────────┘      └─────────┘
+                   │ C_ground(dn)
+            ┌──────▼───────────────────────┐
+            │          下层金属 Mn-1        │
+            └──────────────────────────────┘
+                          ⏚ 衬底
+
+  C_ground  = 对上下层 / 衬底的电容  → 恒定负载，只让线"变慢"
+  C_coupling= 对同层左右邻线的电容   → 负载随邻线翻转方向而变</code></pre>
+
+  <div class="box danger">
+    <span class="box-t">为什么先进节点必须单独管 CC</span>
+    金属线的截面在缩小，但为了控制电阻，厚度不能同比缩小 → <strong>线变得又高又窄，间距也更小</strong>。<br>
+    结果：侧壁（sidewall）面积相对变大，<strong>C_coupling 占 C_total 的比例从 0.18µm 时代的 20~30% 上升到 16nm/7nm 的 60~80%</strong>。<br>
+    <strong>→ 在先进节点，"互连电容"基本就是"耦合电容"。只管 cworst/cbest 等于只管了小头。</strong>
+  </div>
+
+  <h5>② 米勒效应：耦合电容的等效值不是固定的</h5>
+  <p>耦合电容两端都是动的。victim 线看到的<strong>等效</strong>电容取决于邻线（aggressor）此刻在做什么：</p>
+  <table>
+    <thead><tr>
+      <th style="width:150px">aggressor 行为</th><th style="width:130px">等效 Cc（米勒系数 k）</th>
+      <th style="width:110px">victim 延迟</th><th>受害的检查</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>静止（不翻转）</td><td>k = 1 → <code>Cc</code></td><td>基准</td><td>—</td></tr>
+      <tr><td><strong>反向</strong>翻转（victim↑ / aggr↓）</td><td><strong>k = 2</strong> → <code>2·Cc</code></td><td><span class="tag max">变慢</span></td><td>数据路径慢 → <strong>setup</strong><br>时钟路径慢 → 另一侧 hold</td></tr>
+      <tr><td><strong>同向</strong>翻转（victim↑ / aggr↑）</td><td><strong>k = 0</strong> → <code>0</code></td><td><span class="tag min">变快</span></td><td>数据路径快 → <strong>hold</strong></td></tr>
+      <tr><td>victim 静止、aggr 翻转</td><td>—（无延迟变化）</td><td>产生 <strong>glitch</strong></td><td>噪声 / 功能错误</td></tr>
+    </tbody>
+  </table>
+  <div class="box note">
+    <span class="box-t">米勒系数 k 的工程取值</span>
+    理论上 k ∈ [0, 2]，但真实翻转有 slew、有时间错位，极少真的到 0 或 2。<br>
+    提参工具常用 <strong>k = 0 / 1 / 2</strong> 做静态近似（对应 <code>CCbest</code> / 无 SI / <code>CCworst</code>），
+    而 PT SI 会按实际 slew 和时间窗重叠度<strong>动态</strong>算出介于两者之间的值。
+  </div>
+
+  <h5>③ CC corner 与 cworst / rcworst 是正交的两个维度</h5>
+  <div class="box key">
+    <span class="box-t">不要把它们理解成同一条轴上的点</span>
+    <strong>cworst / cbest / rcworst / rcbest</strong>：描述<strong>工艺偏差</strong>（金属宽度、介质厚度的 ±3σ），决定 R 和 C_ground 的大小。<br>
+    <strong>CCworst / CCbest</strong>：描述<strong>耦合项如何折算</strong>（米勒系数取 2 还是 0），决定 C_coupling 的等效大小。<br><br>
+    两者相乘才得到完整的 corner 名字，所以才会出现 <code>cworst_CCworst</code> 这种"双段式"命名。
+  </div>
+
+  <table>
+    <thead><tr>
+      <th style="width:190px">RC corner 全名</th><th style="width:95px">工艺段</th><th style="width:95px">耦合段</th>
+      <th style="width:85px">互连延迟</th><th>典型用途</th>
+    </tr></thead>
+    <tbody>
+      <tr><td><code>cworst_CCworst</code></td><td>C 最大</td><td>k=2</td><td><span class="tag max">最大</span></td><td><strong>setup 签核主力</strong>（长线主导的设计）</td></tr>
+      <tr><td><code>rcworst_CCworst</code></td><td>RC 积最大</td><td>k=2</td><td><span class="tag max">最大</span></td><td><strong>setup 签核</strong>（短/中线、via 栈多）</td></tr>
+      <tr><td><code>cbest_CCbest</code></td><td>C 最小</td><td>k=0</td><td><span class="tag min">最小</span></td><td><strong>hold 签核主力</strong></td></tr>
+      <tr><td><code>rcbest_CCbest</code></td><td>RC 积最小</td><td>k=0</td><td><span class="tag min">最小</span></td><td>hold 签核补充</td></tr>
+      <tr><td><code>typical</code></td><td>标称</td><td>k=1</td><td>标称</td><td>功能仿真 / 早期评估</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box warn">
+    <span class="box-t">为什么没有 cworst_CCbest 这种交叉组合</span>
+    理论上存在，但签核不用。原因是 corner 的作用是<strong>给出单向的悲观边界</strong>：<br>
+    setup 要"全都最慢" → 工艺段和耦合段都取 worst；hold 要"全都最快" → 两段都取 best。<br>
+    混搭（如 <code>cworst_CCbest</code>）既不是最慢也不是最快，<strong>既不保守也不可用</strong>，只会浪费一个 view。<br>
+    例外：某些 PDK 提供它用于<strong>诊断</strong>，看某条路径的违例到底是 C_ground 还是 C_coupling 贡献的。
+  </div>
+
+  <h5>④ 命名变体：不同 foundry 写法不一样</h5>
+  <table>
+    <thead><tr><th style="width:280px">写法</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><code>cworst_CCworst</code> / <code>cbest_CCbest</code></td><td>最常见（TSMC 风格），两段用下划线连接</td></tr>
+      <tr><td><code>cworst_CCworst_T</code> / <code>..._125C</code></td><td>后缀再带温度 —— 先进节点的 RC 本身随温度变（金属电阻 TCR）</td></tr>
+      <tr><td><code>Cmax</code> / <code>Cmin</code> / <code>RCmax</code> / <code>RCmin</code></td><td>部分 foundry 的简写，是否含耦合需查 PDK 说明</td></tr>
+      <tr><td><code>cworst_125c</code>（无 CC 段）</td><td>较老节点，耦合已按 k=1 合并进总电容，不单独拆分</td></tr>
+    </tbody>
+  </table>
+  <div class="box danger">
+    <span class="box-t">一个高频误判</span>
+    看到 corner 名里<strong>没有</strong> <code>CC</code> 字样，<strong>不等于</strong>这份技术文件里没有耦合电容。<br>
+    老节点 / 简化流程通常是把耦合<strong>按 k=1 折算进了对地电容</strong>（SPEF 里只有 <code>*CAP</code> 的单端项，没有双端耦合项）。<br>
+    <strong>→ 判断依据不是 corner 名，而是看提参输出的 SPEF 里有没有双节点电容项。</strong>
+  </div>
+
+  <h5>⑤ SPEF 里耦合电容长什么样</h5>
+  <pre><code>*D_NET net_victim 12.345        &lt;-- 该 net 的总电容（含耦合）
+
+*CONN
+*I  U1:Z  O  *C 10.5 20.3  *L 0.8
+*I  U2:A  I  *C 15.2 20.3  *D DFCNQD1BWP7T40
+
+*CAP
+1  net_victim:1           0.812        &lt;-- 单节点 → 对地电容 C_ground
+2  net_victim:2           0.654        &lt;-- 单节点 → 对地电容
+3  net_victim:3  net_aggr:5   0.431     &lt;-- 双节点 → 耦合电容 Cc ★
+4  net_victim:3  net_aggr2:2  0.207     &lt;-- 双节点 → 耦合电容 Cc ★
+
+*RES
+1  net_victim:1  net_victim:2   3.21
+...
+*END</code></pre>
+  <div class="box key">
+    <span class="box-t">一眼看出 SPEF 有没有保留耦合</span>
+    <code>*CAP</code> 段里每一行<strong>有两个节点名</strong>的就是耦合电容；<strong>只有一个节点名</strong>的是对地电容。<br>
+    如果整份 SPEF 的 <code>*CAP</code> 全是单节点 → 说明做了 <strong>coupling-to-ground 折算</strong>（grounded SPEF），
+    <strong>此时无法再做 SI 分析</strong>，PT SI 会直接报"no coupling found"。<br>
+    提参时要显式要求保留：<code>extract -coupling</code>（工具选项名各异），且<strong>不要设过大的耦合忽略阈值</strong>
+    （<code>coupling_c_threshold</code> 设太大会把小耦合全部折算掉）。
+  </div>
+
+  <h5>⑥ CC corner 只给出 Cc 的大小，delta delay 要靠 PT SI 算</h5>
+  <div class="box warn">
+    <span class="box-t">两个容易混为一谈的东西</span>
+    <strong>CC corner（提参阶段）</strong>：决定 SPEF 里 <code>Cc</code> 这个<strong>数值</strong>是多少，是静态的工艺/折算假设。<br>
+    <strong>PT SI（分析阶段）</strong>：拿着 SPEF 里的 <code>Cc</code>，再结合
+    ① aggressor 和 victim 的<strong>时序窗口是否重叠</strong>
+    ② 翻转方向是否相反
+    ③ 双方的驱动强度与 slew<br>
+    才算出真正的 <strong>delta delay</strong> 和 <strong>glitch 高度</strong>。<br><br>
+    <strong>→ 只跑 <code>_CCworst</code> 而不开 SI 分析，等于把所有邻线都当成"永远反向同时翻转"，过度悲观；<br>
+    只开 SI 但 SPEF 是 grounded 的，则 SI 完全失效。两者必须配套。</strong>
+  </div>
+
+  <p><strong>时序窗口重叠的意义：</strong>只有 aggressor 在 victim 翻转的<strong>同一时间窗</strong>内翻转，才会产生 delta delay。</p>
+  <pre class="wave"><code>                 victim 的翻转窗口
+                 ├───────────────┤
+  aggr A  ├─────┤                          ← 不重叠，无影响
+  aggr B          ├────────┤               ← 重叠 ★ 计入 delta delay
+  aggr C                        ├──────┤   ← 不重叠，无影响
+
+  PT SI 会迭代：算延迟 → 更新时序窗口 → 重新判断重叠 → 再算延迟 …
+  直到收敛（典型 2~3 轮）。这就是 PT SI 比普通 STA 慢很多的原因。</code></pre>
+
+  <pre><code># PrimeTime SI 的典型开启方式
+set si_enable_analysis              true
+set si_xtalk_double_switching_mode  clock_network   ;# 考虑二次翻转
+read_parasitics  -keep_capacitive_coupling  top_cworst_CCworst.spef
+update_timing -full
+
+# 看耦合贡献了多少
+report_si_bottleneck -cost_type delta_delay      -max_lines 50
+report_si_bottleneck -cost_type delta_delay_ratio
+report_timing -crosstalk_delta                   ;# 路径报告里逐级列出 delta</code></pre>
+
+  <h5>⑦ 耦合对 setup 和 hold 是双向影响</h5>
+  <p>这是耦合电容区别于普通负载电容的关键：普通电容只会让线<strong>变慢</strong>，耦合则<strong>两个方向都会变</strong>。</p>
+  <table>
+    <thead><tr>
+      <th style="width:130px">受影响路径</th><th style="width:110px">邻线翻转方向</th>
+      <th style="width:90px">效果</th><th>对 slack 的影响</th>
+    </tr></thead>
+    <tbody>
+      <tr><td rowspan="2">数据路径</td><td>反向</td><td><span class="tag max">变慢</span></td><td><code>T_datapath_max</code> ↑ → <strong>setup slack 变小</strong></td></tr>
+      <tr><td>同向</td><td><span class="tag min">变快</span></td><td><code>T_datapath_min</code> ↓ → <strong>hold slack 变小</strong></td></tr>
+      <tr><td rowspan="2">launch 时钟路径</td><td>反向</td><td><span class="tag max">变慢</span></td><td><code>T_clk_launch</code> ↑ → setup 变差、hold 变好</td></tr>
+      <tr><td>同向</td><td><span class="tag min">变快</span></td><td><code>T_clk_launch</code> ↓ → setup 变好、<strong>hold 变差</strong></td></tr>
+      <tr><td rowspan="2">capture 时钟路径</td><td>反向</td><td><span class="tag max">变慢</span></td><td><code>T_clk_capture</code> ↑ → setup 变好、<strong>hold 变差</strong></td></tr>
+      <tr><td>同向</td><td><span class="tag min">变快</span></td><td><code>T_clk_capture</code> ↓ → <strong>setup 变差</strong>、hold 变好</td></tr>
+    </tbody>
+  </table>
+  <div class="box danger">
+    <span class="box-t">时钟网络上的耦合最危险</span>
+    时钟线上的 delta delay 直接变成 <strong>额外的 skew</strong>，而且是<strong>数据相关、每周期都可能不同</strong>的随机 skew。<br>
+    一条被严重耦合的时钟线可能在某些周期产生几十 ps 的抖动 → <strong>hold 违例，且只在特定数据模式下出现，极难在硅后定位。</strong><br>
+    → 所以时钟网络通常强制加 <strong>shielding（两侧夹地线）</strong>、<strong>加大间距（NDR）</strong>、<strong>走专用层</strong>，
+    从物理上把 <code>Cc</code> 压到最小，而不是指望 corner 去 cover。
+  </div>
+  <div class="box note">
+    <span class="box-t">与其他章节的衔接</span>
+    SI 作为<strong>独立 corner 维度</strong>的整体定位见 <strong>3.13 节</strong>；<br>
+    crosstalk 的 delta delay 在流到<strong>门级仿真</strong>时被固化进 SDF <code>INTERCONNECT</code> 数值、
+    从而丢失动态性这一问题，同样在 <strong>3.13 节</strong>展开。<br>
+    本小节只讲<strong>提参侧</strong>：耦合电容本身怎么被建模、怎么被 corner 命名区分。
+  </div>
+
+  <h5>⑧ 耦合相关的工程 checklist</h5>
+  <table>
+    <thead><tr><th style="width:38px">#</th><th style="width:300px">检查项</th><th>判据</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>SPEF 的 <code>*CAP</code> 段是否有双节点项</td><td>没有 → 耦合已折算，SI 无法做</td></tr>
+      <tr><td>2</td><td>提参的 coupling 忽略阈值是否过大</td><td>一般 <code>0.01~0.03</code> 的比例阈值，别随手放大</td></tr>
+      <tr><td>3</td><td><code>si_enable_analysis</code> 是否为 true</td><td>默认可能是 false，SPEF 带耦合但不分析＝白做</td></tr>
+      <tr><td>4</td><td>setup / hold 是否各自用了匹配的 CC 段</td><td>setup 用 <code>_CCworst</code>，hold 用 <code>_CCbest</code></td></tr>
+      <tr><td>5</td><td>时钟网络是否做了 shielding / NDR</td><td>查 <code>report_si_bottleneck</code> 里有无时钟 net</td></tr>
+      <tr><td>6</td><td>noise（glitch）分析是否单独跑过</td><td>delta delay 没问题 ≠ 没有 glitch，二者独立</td></tr>
+      <tr><td>7</td><td>SDF 导出时 SI delta 是否已包含</td><td><code>write_sdf</code> 需在 SI 更新后执行，否则 SDF 不含耦合影响</td></tr>
+    </tbody>
+  </table>
 
   <h4>决策流程：RC corner 要跑哪几个</h4>
   <p>RC 维度不能靠"感觉"省。下面是可以照着走的判定顺序。</p>
