@@ -162,6 +162,7 @@
     <button data-target="p6">7 · PT 报告对照</button>
     <button data-target="p7">8 · 命令速查</button>
     <button data-target="p9">9 · 常见 Cell 解读</button>
+    <button data-target="p10">10 · 反标验证与排查</button>
   </nav>
 </header>
 
@@ -1366,6 +1367,248 @@ write_sdf -delay_type max top_max.sdf</code></pre>
       <tr><td>实例名含 <code>Spare</code> / <code>TIE</code></td><td>非功能单元</td><td>不影响时序，别误判反标率</td></tr>
     </tbody>
   </table>
+</section>
+
+
+<!-- ============ 10 ============ -->
+<section class="panel" id="p10">
+  <h2>10 · VCS 反标验证与排查</h2>
+
+  <p>"仿真跑完了、没报错、PASS"<strong>不等于</strong>反标生效。SDF 反标失败在绝大多数情况下是
+  <strong>静默</strong>的：未匹配的路径会退回库模型的默认延迟（通常接近 0），仿真照样跑完，
+  时序验证形同虚设。必须按下面三层主动检查。</p>
+
+  <div class="box danger">
+    <span class="box-t">三层检查，缺一层就可能"以为反标了其实没反标"</span>
+    ① <strong>读进去了吗</strong> —— elaborate 阶段的 log 诊断<br>
+    ② <strong>三元组是空的吗</strong> —— SDF 文件静态文本检查<br>
+    ③ <strong>延迟真的进仿真了吗</strong> —— 运行时波形/违例验证<br>
+    前两层只是"看 log"，<strong>只有第三层能真正证明反标生效</strong>。
+  </div>
+
+  <h3>10.1 第一层：确认 SDF 被读进去且匹配上</h3>
+
+  <h4>必须指定 log 文件并开 verbose</h4>
+<pre><code># 方式 A：TB 内 $sdf_annotate，第 4 个参数就是 log 文件
+initial $sdf_annotate("top_max.sdf", tb.dut, , "sdf_annotate.log", "MAXIMUM");
+
+# 方式 B：命令行
+vcs ... -sdf max:tb.dut:top_max.sdf +sdfverbose</code></pre>
+
+  <div class="box warn">
+    <span class="box-t">+sdfverbose 是关键</span>
+    不开它，VCS 默认只报前若干条警告就静默了。你会看到一个"干净"的 log
+    而误以为没问题 —— 这是最常见的误判来源。
+  </div>
+
+  <h4>grep 诊断信息</h4>
+<pre><code># VCS 所有 SDF 相关诊断都以 SDFCOM_ 为前缀
+grep -c "SDFCOM" vcs.log
+
+# 按类型归类统计
+grep "SDFCOM" vcs.log | sed 's/.*\(SDFCOM_[A-Z]*\).*/\1/' | sort | uniq -c</code></pre>
+
+  <table>
+    <thead><tr><th style="width:200px">诊断类型</th><th>含义</th><th>处理</th></tr></thead>
+    <tbody>
+      <tr><td>无法解析层次 / 实例名</td><td>SDF 里的 <code>INSTANCE</code> 在网表中找不到</td>
+          <td><strong>必须清零</strong> —— scope 给错或网表版本不对</td></tr>
+      <tr><td>IOPATH / 端口找不到</td><td>库模型的 <code>specify</code> 块里没这条路径</td>
+          <td><strong>必须清零</strong> —— 库版本与 SDF 不匹配</td></tr>
+      <tr><td>TIMINGCHECK 找不到</td><td>库 <code>.v</code> 没有对应的 <code>$setuphold</code></td>
+          <td><strong>必须清零</strong> —— 否则该 FF 完全不检查时序</td></tr>
+      <tr><td>COND 不匹配</td><td>SDF 条件表达式与库 <code>specify</code> 的 <code>if</code> 不一致</td>
+          <td>高发区，需单独 grep 确认</td></tr>
+    </tbody>
+  </table>
+
+<pre><code># COND 要专门看 —— 它是静默退回库默认值的
+grep -i "cond" sdf_annotate.log | head -50</code></pre>
+
+  <h4>数量对账（最容易被跳过，但最有效）</h4>
+<pre><code># SDF 里有多少个 CELL
+grep -c "^\s*(CELL" top_max.sdf
+
+# 网表里有多少个实例（粗略估计）
+grep -cE "^\s+[A-Z0-9_]+ +[A-Za-z_][A-Za-z0-9_]* *\(" netlist.v</code></pre>
+
+  <div class="box key">
+    <span class="box-t">对账时要扣除/加回的部分</span>
+    · <strong>扣掉</strong> filler / decap / well tap / antenna diode —— 这些<strong>不出现</strong>在 SDF 中（见 9.12）<br>
+    · <strong>注意</strong> spare cell —— 这些<strong>出现</strong>在 SDF 中但对时序无贡献<br><br>
+    如果 annotated 数远小于 CELL 数 → <strong>大面积没反标上</strong>。
+    这种情况仿真会跑完、会 PASS，但时序验证完全是假的。
+  </div>
+
+  <h4>两个容易漏的开关</h4>
+  <table>
+    <thead><tr><th style="width:230px">开关</th><th>作用</th><th>何时必须开</th></tr></thead>
+    <tbody>
+      <tr><td><code>+multisource_int_delays</code></td><td>支持多源互连延迟</td>
+          <td>SDF 含多源 <code>INTERCONNECT</code> 时，<strong>不开会只取一条</strong></td></tr>
+      <tr><td><code>+transport_int_delays</code></td><td>互连按 transport 模型（保留窄脉冲）</td>
+          <td>需要观察 glitch 传播时；默认 inertial 会吞掉窄脉冲</td></tr>
+    </tbody>
+  </table>
+
+  <h3>10.2 第二层：确认三元组本身不是空的</h3>
+
+  <p>这一步在跑仿真<strong>之前</strong>做，纯文本检查，成本极低。</p>
+
+  <h4>先摸清这份 SDF 是什么导出风格</h4>
+<pre><code># 统计各种三元组形态出现次数
+grep -oE "\([0-9.:+-]*\)" top.sdf | sort | uniq -c | sort -rn | head -20</code></pre>
+
+  <table>
+    <thead><tr><th style="width:170px">形态</th><th>含义</th><th><code>+typdelays</code> 下的后果</th></tr></thead>
+    <tbody>
+      <tr><td><code>(0.018:0.018:0.018)</code></td><td>三值齐全（单 corner 导出）</td><td>正常</td></tr>
+      <tr><td><code>(0.018::0.018)</code></td><td><strong>typ 为空</strong> —— <code>-delay_type min_max</code> 导出</td>
+          <td><span class="tag max">危险</span> 静默退回库默认值</td></tr>
+      <tr><td><code>(::0.300)</code></td><td>只有 max —— <code>-delay_type max</code> 导出</td><td>min / typ 都取不到</td></tr>
+      <tr><td><code>(0.018)</code></td><td>单值，三者相同</td><td>正常</td></tr>
+      <tr><td><code>(::)</code> / <code>()</code></td><td>全空</td><td>该条完全不生效</td></tr>
+    </tbody>
+  </table>
+
+  <h4>针对性地数空字段</h4>
+<pre><code># typ 位为空的条目数（min::max 风格）
+grep -oE "\([0-9.+-]+::[0-9.+-]+\)" top.sdf | wc -l
+
+# min 位为空（只有 max）
+grep -oE "\(::[0-9.+-]+\)" top.sdf | wc -l
+
+# 彻底全空
+grep -oE "\(::\)|\(\)" top.sdf | wc -l</code></pre>
+
+  <div class="box danger">
+    <span class="box-t">第 1.5 节那份 SDF 正是这个问题</span>
+    片段中的 <code>(0.018::0.018)</code> —— <strong>typ 位是空的</strong>。<br><br>
+    按 IEEE 1497，三元组中缺省的字段表示"未指定"，反标工具应当
+    <strong>保留目标对象的原有值</strong>（即库模型里的默认延迟）。所以：<br><br>
+    <code>vcs +typdelays -sdf typ:tb.dut:your.sdf</code> &nbsp;← <strong>对这份 SDF 是错的</strong><br><br>
+    这条命令不会报错、不会 unmatched，但大量路径会<strong>悄悄退回库默认值</strong>。
+  </div>
+
+<pre><code># 正确做法：只用 min 和 max 两端
+vcs +maxdelays -sdf max:tb.dut:your.sdf    # setup 验证
+vcs +mindelays -sdf min:tb.dut:your.sdf    # hold  验证</code></pre>
+
+  <div class="box warn">
+    <span class="box-t">两处选择必须一致</span>
+    <code>+mindelays</code>/<code>+typdelays</code>/<code>+maxdelays</code> 与
+    <code>-sdf min|typ|max:...</code> 两处<strong>必须一致</strong>。<br>
+    写成 <code>-sdf max:...</code> 却加 <code>+mindelays</code> 是常见的自相矛盾配置。<br>
+    若用 <code>$sdf_annotate</code> 的 <code>"TOOL_CONTROL"</code>，则完全交由命令行开关决定。
+  </div>
+
+  <h4>确认 TIMESCALE 对得上</h4>
+<pre><code>grep -i "TIMESCALE" top.sdf      # 例如 (TIMESCALE 1ns)
+grep -i "timescale" netlist.v    # 例如 `timescale 1ns/1ps
+
+vcs -diag timescale ...          # 让 VCS 主动报出不一致</code></pre>
+
+  <div class="box danger">
+    <span class="box-t">单位不匹配 → 延迟被舍入成 0</span>
+    SDF 的 <code>0.018 ns</code> = 18 ps。如果仿真精度只到 <code>1ns</code>，
+    这个值会被<strong>舍入成 0</strong> —— 反标"成功"（log 干净），但延迟全是 0。
+    这是最隐蔽的一类失败。
+  </div>
+
+  <h3>10.3 第三层：确认延迟真的进入仿真</h3>
+
+  <p>前两层都是"看 log"，这一层是"看结果"。<strong>只有这一层能真正证明反标生效。</strong></p>
+
+  <h4>① 波形量延迟 ← 首选</h4>
+  <p>抓一个 FF，在波形上量 <code>CK</code> 上升沿到 <code>Q</code> 变化的时间，
+  和 SDF 里那条 <code>IOPATH (posedge CP) Q</code> 的数值对比。</p>
+<pre><code>grep -A3 "INSTANCE u_core/state_reg_3" top_max.sdf</code></pre>
+<pre class="formula">对得上                    → 反标生效
+Q 与 CK 同时刻跳变（零延迟） → 没反标上</pre>
+
+  <h4>② 极端值注入法 ← 最可靠的端到端验证</h4>
+  <p>复制一份 SDF，把某个关键单元的延迟改成荒谬的大值：</p>
+<pre><code>(IOPATH (posedge CP) Q (5.000:5.000:5.000) (5.000:5.000:5.000))</code></pre>
+  <p>重跑，看波形上该 FF 的 <code>Q</code> 是否真的延后 5ns。</p>
+  <div class="box key">
+    <span class="box-t">这招能排除所有"log 干净但其实没生效"的情况</span>
+    · 波形<strong>变了</strong> → 反标链路（文件 → scope → 实例 → 路径）完全通畅<br>
+    · 波形<strong>没变</strong> → 反标在某一环断了<br><br>
+    因为它验证的是端到端结果，不依赖任何 log 的可信度。
+  </div>
+
+  <h4>③ 故意制造违例，验证 TIMINGCHECK 生效</h4>
+  <p>把时钟周期压到明显不够（比如砍一半），重跑，应该看到大量
+  <code>Timing violation</code> 报告。<strong>如果一条都没有</strong>，按下表排查：</p>
+  <table>
+    <thead><tr><th style="width:230px">可能原因</th><th>检查方式</th></tr></thead>
+    <tbody>
+      <tr><td>加了 <code>+notimingcheck</code></td><td>去掉 —— 它保留延迟但关闭所有检查</td></tr>
+      <tr><td>加了 <code>+nospecify</code></td><td>去掉 —— 它把延迟和检查<strong>一起关</strong>了</td></tr>
+      <tr><td>加了 <code>+no_notifier</code></td><td>违例不产生 X，但<strong>仍应打印报告</strong>；签核绝不能开</td></tr>
+      <tr><td>SDF 里本来就没有 TIMINGCHECK 段</td><td><code>grep -c TIMINGCHECK top.sdf</code></td></tr>
+      <tr><td>库 <code>.v</code> 的 specify 块被编译选项屏蔽</td><td>检查 <code>-v</code> / <code>-y</code> 与 <code>+nospecify</code> 的组合</td></tr>
+    </tbody>
+  </table>
+
+  <h4>④ 负时序检查必须开</h4>
+<pre><code>vcs +neg_tchk -negdelay ...</code></pre>
+  <div class="box warn">
+    <span class="box-t">不开会产生 STA 里不存在的假违例</span>
+    SDF 里的负 hold（如 9.5 节的 <code>(-0.012::-0.012)</code>）会被<strong>钳到 0</strong>，
+    导致 hold 检查比 STA 更严格，报出一堆 STA 中并不存在的违例，
+    浪费大量时间去 debug 不存在的问题。
+  </div>
+
+  <h3>10.4 完整 checklist（可直接照着走）</h3>
+<pre><code># ========== 跑之前：静态检查 SDF ==========
+grep -i "SDFVERSION\|DESIGN\|DIVIDER\|TIMESCALE\|VOLTAGE\|PROCESS\|TEMPERATURE" top.sdf | head
+grep -oE "\([0-9.:+-]*\)" top.sdf | sort | uniq -c | sort -rn | head
+grep -c "^\s*(CELL"   top.sdf
+grep -c "TIMINGCHECK" top.sdf
+
+# ========== 编译 / elaborate ==========
+vcs -full64 -sverilog \
+    -sdf max:tb.dut:top_ss.sdf \
+    +maxdelays \
+    +sdfverbose \
+    +multisource_int_delays \
+    +neg_tchk -negdelay \
+    -diag timescale \
+    -v /pdk/slow_lib.v \
+    tb.sv netlist.v 2>&1 | tee comp.log
+
+# ========== elab 后立刻查 ==========
+grep "SDFCOM" comp.log | wc -l                 # 目标：0
+grep -i "cond"  sdf_annotate.log | wc -l       # COND 单独确认
+grep -i "timescale" comp.log                   # 单位一致性
+
+# ========== 跑之后：验证生效 ==========
+# 1) 波形量一个 FF 的 CK→Q，与 SDF 数值核对
+# 2) 极端值注入（改成 5ns）重跑一次，确认波形变化
+# 3) 压缩时钟周期，确认能报出 Timing violation</code></pre>
+
+  <h3>10.5 最常见的四个"假反标"</h3>
+  <table>
+    <thead><tr><th style="width:290px">现象</th><th>根因</th></tr></thead>
+    <tbody>
+      <tr><td>log 干净、仿真 PASS，但波形上组合逻辑零延迟</td>
+          <td>scope 给错（<code>tb.dut</code> vs <code>tb.dut.u_core</code>），整块没匹配</td></tr>
+      <tr><td>反标数量很大，但时序验证查不出任何问题</td>
+          <td>大量 spare cell 撑高了 annotated 计数，真实逻辑其实没反标</td></tr>
+      <tr><td>延迟全是 0</td>
+          <td>SDF <code>TIMESCALE</code> 与 <code>`timescale</code> 精度不匹配，被舍入</td></tr>
+      <tr><td>用 <code>+typdelays</code> 跑 <code>min::max</code> 风格的 SDF</td>
+          <td>typ 位为空 → 静默退回库默认值</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box note">
+    <span class="box-t">一句话原则</span>
+    SDF 反标的失败几乎都是<strong>静默</strong>的。
+    不要相信"没报错"，要相信<strong>波形上量出来的延迟</strong>和
+    <strong>故意造出来的违例</strong>。
+  </div>
 </section>
 
 </main>
