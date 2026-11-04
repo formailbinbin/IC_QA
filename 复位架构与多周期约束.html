@@ -13,6 +13,7 @@ header .sub{color:var(--muted);font-size:15px;margin:0}
 h2{font-size:23px;font-weight:600;margin:48px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--line)}
 h3{font-size:18px;font-weight:600;margin:32px 0 12px}
 h4{font-size:16px;font-weight:600;margin:24px 0 8px}
+h5{font-size:14.5px;font-weight:600;margin:20px 0 6px;color:var(--accent)}
 p{margin:12px 0}
 ul,ol{margin:12px 0;padding-left:26px}
 li{margin:6px 0}
@@ -31,6 +32,28 @@ th{background:var(--code-bg);font-weight:600}
 .diagram{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:18px;margin:16px 0;overflow-x:auto;font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre}
 .formula{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:14px 18px;margin:16px 0;text-align:center;font-family:ui-monospace,Consolas,monospace;font-size:15px;overflow-x:auto}
 .fileref{font-family:ui-monospace,Consolas,monospace;font-size:13.5px;color:var(--accent)}
+.mindmap{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:24px 20px;margin:20px 0;overflow-x:auto}
+.mindmap ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;justify-content:center}
+.mindmap li{display:flex;align-items:center;position:relative;margin:0;padding:3px 0}
+.mindmap li>ul{position:relative;padding-left:34px;margin:0}
+.mindmap li>ul::before{content:"";position:absolute;left:0;top:50%;width:16px;border-top:1px solid var(--line)}
+.mindmap li>ul>li::before{content:"";position:absolute;left:-18px;top:50%;width:18px;border-top:1px solid var(--line)}
+.mindmap li>ul>li::after{content:"";position:absolute;left:-18px;top:0;bottom:0;border-left:1px solid var(--line)}
+.mindmap li>ul>li:first-child::after{top:50%}
+.mindmap li>ul>li:last-child::after{bottom:50%}
+.mindmap li>ul>li:only-child::after{display:none}
+.mindmap .n{display:inline-block;white-space:nowrap;padding:5px 11px;border-radius:5px;border:1px solid var(--line);background:#fff;font-size:13.5px;line-height:1.4;text-decoration:none;color:var(--fg)}
+.mindmap a.n:hover{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 2px #ddf4ff}
+.mindmap .l0{background:var(--accent);color:#fff;border-color:var(--accent);font-size:16px;font-weight:600;padding:9px 18px}
+.mindmap .l1{background:#ddf4ff;border-color:#9fd0fb;font-weight:600;color:#0a4a82}
+.mindmap .hot{background:var(--ok-bg);border-color:var(--ok-line);font-weight:600}
+.mindmap .risk{background:var(--bad-bg);border-color:var(--bad-line)}
+.mindmap .tag{color:var(--muted);font-size:12px;font-weight:400;margin-left:6px}
+.mm-legend{display:flex;flex-wrap:wrap;gap:16px;margin:10px 0 0;padding-top:12px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.mm-legend span::before{content:"";display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid var(--line)}
+.mm-legend .k-hot::before{background:var(--ok-bg);border-color:var(--ok-line)}
+.mm-legend .k-risk::before{background:var(--bad-bg);border-color:var(--bad-line)}
+.mm-legend .k-norm::before{background:#fff}
 .part{margin:72px 0 8px;padding:16px 20px;border-radius:8px;background:#ddf4ff;border:1px solid #9fd0fb}
 .part .pn{font-size:12px;color:var(--accent);font-weight:600;letter-spacing:1px}
 .part h2{border:0;margin:2px 0 0;padding:0;font-size:26px}
@@ -44,6 +67,7 @@ footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);color:v
 #nav a.lv1{font-weight:600;color:var(--fg);margin-top:10px}
 #nav a.lv2{padding-left:20px}
 #nav a.lv3{padding-left:34px;font-size:13px}
+#nav a.lv4{padding-left:48px;font-size:12.5px}
 body.has-nav .wrap{margin-left:264px}
 #nav-toggle{display:none;position:fixed;top:12px;left:12px;z-index:30;width:38px;height:38px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:17px;cursor:pointer}
 @media (max-width:1180px){#nav{transform:translateX(-100%);transition:transform .2s ease}#nav.open{transform:none;box-shadow:0 0 0 100vmax rgba(0,0,0,.25)}body.has-nav .wrap{margin-left:0}#nav-toggle{display:block}header{padding-top:60px}}</style>
@@ -53,8 +77,15 @@ body.has-nav .wrap{margin-left:264px}
 <nav id="nav">
 <p class="nav-title">目录</p>
 <a class="lv1" href="#P1">第一部分 · 复位架构</a>
+<a class="lv2" href="#0">0. 复位架构全景图</a>
 <a class="lv2" href="#1">1. 异步复位 vs 同步复位</a>
-<a class="lv2" href="#2">2. 异步复位、同步释放</a>
+<a class="lv3" href="#1-4">1.4 断言 × 撤离 两个维度</a>
+<a class="lv3" href="#1-5">1.5 其他正交维度</a>
+<a class="lv2" href="#2">2. 异步复位的两种撤离方式</a>
+<a class="lv3" href="#2-4">2.4 高频撤离 vs 低频撤离</a>
+<a class="lv4" href="#2-4-1">2.4.1 两级同步器代码实现</a>
+<a class="lv3" href="#2-5">2.5 异步撤离：靠流程保证</a>
+<a class="lv3" href="#2-6">2.6 三种方案横向对比</a>
 <a class="lv2" href="#3">3. 时序收敛：recovery / removal</a>
 <a class="lv2" href="#4">4. 高频下同步释放的难点</a>
 <a class="lv2" href="#5">5. 同步复位的适用场景</a>
@@ -74,12 +105,79 @@ body.has-nav .wrap{margin-left:264px}
 <div class="wrap">
 <header>
 <h1>复位架构与多周期约束</h1>
-<p class="sub">异步/同步复位 · 异步复位同步释放 · 时钟门控交互 · set_multicycle_path 原理与实战 Review</p>
+<p class="sub">断言 × 撤离两个维度 · 同步撤离（高频/低频）与异步撤离 · 时序收敛 · 时钟门控交互 · set_multicycle_path 原理与实战 Review</p>
 </header>
 <div class="part" id="P1">
 <div class="pn">第 一 部 分</div>
 <h2>复位架构</h2>
-<p class="pd">从两种复位方式的本质差异出发，推进到工业界标准方案、时序收敛手段、高频物理极限，以及与时钟门控的交互陷阱。</p>
+<p class="pd">先把「断言」与「撤离」拆成两个正交维度，再分别讨论同步撤离（高频 / 低频）与异步撤离两条技术路线，以及时序收敛手段、高频物理极限、与时钟门控的交互陷阱。</p>
+</div>
+<h2 id="0">0. 复位架构全景图</h2>
+<p>先建立整体框架。下图中每个节点都可以点击，直接跳到对应章节。</p>
+<div class="mindmap">
+<ul>
+<li><span class="n l0">复位</span>
+  <ul>
+    <li><a class="n l1" href="#1-4">断言方式<span class="tag">何时生效</span></a>
+      <ul>
+        <li><a class="n" href="#1-1">同步断言<span class="tag">等时钟沿，上电失效</span></a></li>
+        <li><a class="n hot" href="#1-1">异步断言<span class="tag">不依赖时钟 · 主流</span></a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#1-4">撤离方式<span class="tag">何时解除</span></a>
+      <ul>
+        <li><a class="n hot" href="#2-1">同步撤离<span class="tag">同步器钉住撤离沿</span></a>
+          <ul>
+            <li><a class="n" href="#2-4">高频撤离<span class="tag">挂功能时钟 · 预算紧</span></a></li>
+            <li><a class="n" href="#2-4">低频撤离<span class="tag">挂慢时钟 · 大 SoC 常用</span></a>
+              <ul>
+                <li><a class="n hot" href="#2-4-1">两级同步器<span class="tag">低频 + 功能域补一级 · 代码实现</span></a></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><a class="n hot" href="#2-5">异步撤离<span class="tag">流程保证 · 无 recovery</span></a>
+          <ul>
+            <li><a class="n" href="#2-5">撤离后才开时钟</a></li>
+            <li><a class="n risk" href="#2-5">时钟在跑时前提失效</a></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#2-6">常用组合</a>
+      <ul>
+        <li><a class="n hot" href="#2">异步复位，同步撤离<span class="tag">STA 签核</span></a></li>
+        <li><a class="n hot" href="#2-5">异步复位，异步撤离<span class="tag">流程 + SVA 保证</span></a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#3">时序收敛</a>
+      <ul>
+        <li><a class="n" href="#3-1">recovery / removal<span class="tag">双边夹击窗口</span></a></li>
+        <li><a class="n" href="#3-3">复位树 balance / CTS</a></li>
+        <li><a class="n risk" href="#4-1">高频预算不可解<span class="tag">2 GHz 下 ≈ 0.05 ns</span></a></li>
+        <li><a class="n" href="#4-3">解法：流水分发 / 静默期 / MCP</a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#1-5">其他维度</a>
+      <ul>
+        <li><a class="n" href="#1-5">复位源<span class="tag">POR / WDT / 软复位 / JTAG</span></a></li>
+        <li><a class="n" href="#1-5">层级<span class="tag">cold / warm</span></a></li>
+        <li><a class="n" href="#1-5">极性 · 作用范围 · 撤离顺序</a></li>
+        <li><a class="n risk" href="#2-3">RDC 跨复位域</a></li>
+        <li><a class="n risk" href="#6">时钟门控交互<span class="tag">复位丢失 / 死锁</span></a></li>
+      </ul>
+    </li>
+  </ul>
+</li>
+</ul>
+<div class="mm-legend">
+<span class="k-hot">工业界常用</span>
+<span class="k-risk">风险点 / 陷阱</span>
+<span class="k-norm">一般选项</span>
+</div>
+</div>
+<div class="note">
+<p>图里最关键的一点：<strong>「断言方式」和「撤离方式」是两个独立的维度</strong>，不是一个二选一的开关。日常说的「异步复位」其实只约定了断言方式，撤离怎么做是另一个必须单独回答的问题。详见 <a href="#1-4">1.4</a>。</p>
 </div>
 <h2 id="1">1. 异步复位 vs 同步复位</h2>
 <h3 id="1-1">1.1 两种写法</h3>
@@ -120,8 +218,53 @@ end</code></pre>
 <p>上电瞬间 PLL 没锁定、时钟没起振，同步复位根本无法生效，所有 FF 停在随机初值。如果这些随机值驱动了 pad、电源开关、或 PWM 输出，后果可能是硬件损坏。</p>
 <p>此外，若时钟被门控关闭，一个短于门控窗口的同步复位脉冲会被<strong>永久丢失</strong>（详见 <a href="#6">第 6 章</a>）。</p>
 </div>
-<h2 id="2">2. 异步复位、同步释放</h2>
-<p>既然异步复位怕释放、同步复位怕没时钟，工业界的标准答案就是把两者的优点拼起来：<strong>断言走异步路径（立即生效、不依赖时钟），释放走同步路径（对齐时钟沿、消除亚稳态）</strong>。英文叫 <em>Asynchronous Assert, Synchronous De-assert</em>。</p>
+<h3 id="1-4">1.4 真正的两个维度：断言 × 撤离</h3>
+<p>前面 1.1–1.3 讲的「异步复位 / 同步复位」其实把<strong>两件独立的事绑在了一起</strong>。工程上真正要做的选择有两个正交维度：</p>
+<ul>
+<li><strong>维度一 · 断言（assert）</strong>：复位<em>生效</em>的那一刻，走异步路径还是等时钟沿？</li>
+<li><strong>维度二 · 撤离（de-assert / release）</strong>：复位<em>解除</em>的那一刻，走异步路径还是等时钟沿？</li>
+</ul>
+<div class="diagram">                    ┌─ 同步断言 ─┐              ┌─ 同步撤离 ─┐
+      复位 ────────┤            ├─── × ────────┤            │
+                    └─ 异步断言 ─┘              └─ 异步撤离 ─┘
+                         ↑                           ↑
+                  决定"没有时钟时              决定"有没有 recovery /
+                    能不能复位"                   removal 要收敛"</div>
+<p>两个维度交叉得到四种组合，其中只有两种在工业界真正常用：</p>
+<table>
+<tr><th>组合</th><th>断言</th><th>撤离</th><th>上电无时钟时可用</th><th>STA 检查</th><th>工程评价</th></tr>
+<tr><td>同步复位</td><td>需要时钟</td><td>需要时钟</td><td>否</td><td>setup / hold</td><td>简单，但上电失效</td></tr>
+<tr><td><strong>异步断言 + 同步撤离</strong></td><td>不需要时钟</td><td>需要时钟</td><td>是</td><td>recovery / removal</td><td><strong>主流方案</strong>（见 <a href="#2">第 2 章</a>）</td></tr>
+<tr><td><strong>异步断言 + 异步撤离</strong></td><td>不需要时钟</td><td>不需要时钟</td><td>是</td><td>撤离时无时钟 → 无需检查</td><td><strong>靠流程保证</strong>（见 2.5）</td></tr>
+<tr><td>同步断言 + 异步撤离</td><td>需要时钟</td><td>不需要时钟</td><td>否</td><td>—</td><td>两头缺点都占，几乎不用</td></tr>
+</table>
+<div class="note">
+<p>把这两个维度拆开看，很多事情就通了：</p>
+<ul>
+<li><strong>断言选异步</strong>，是为了「不依赖时钟」—— 上电、PLL 失锁、时钟被门控时仍能可靠进入安全态</li>
+<li><strong>撤离选同步</strong>，是为了「消除亚稳态」—— 让撤离沿与时钟沿的关系变成确定的</li>
+<li><strong>撤离也可以选异步</strong>，前提是<strong>撤离那一刻根本没有时钟沿</strong>。没有时钟沿，就不存在 recovery / removal，亚稳态无从谈起</li>
+</ul>
+</div>
+
+<h3 id="1-5">1.5 其他正交维度</h3>
+<p>除了断言/撤离方式，一套完整的复位架构还要在下面这些维度上逐条定义清楚。这些维度彼此独立，任何一条没想清楚都可能在硅上出事。</p>
+<table>
+<tr><th>维度</th><th>常见取值</th><th>工程关注点</th></tr>
+<tr><td><strong>复位源</strong></td><td>POR 上电复位 / BOR 欠压复位 / 外部 pin 复位 / 看门狗复位 / 软复位（寄存器写）/ 调试复位（JTAG）/ PMU 系统复位 / 安全复位（tamper）</td><td>必须画一张「复位源 × 受影响模块」的矩阵表，明确每个源清哪些、不清哪些，以及源之间的优先级</td></tr>
+<tr><td><strong>复位层级</strong></td><td>cold reset（上电级，清一切）/ warm reset（保留配置与调试状态）/ 子系统复位 / 模块复位 / 单寄存器复位</td><td>warm reset 必须逐条列出「哪些寄存器不被清」，否则软件重启后行为不可预期</td></tr>
+<tr><td><strong>极性</strong></td><td>低有效 <code>rst_n</code>（主流）/ 高有效 <code>rst</code></td><td>标准单元的 <code>RN</code> 端天然低有效，用高有效会多插反相器。全芯片必须统一，混用是 bug 温床</td></tr>
+<tr><td><strong>作用范围</strong></td><td>全局复位 / 局部复位 / <strong>不复位</strong>（数据通路 FF）</td><td>不复位的 FF 省面积省功耗，但上电是 X。必须保证这些 X 不会传播到控制路径或输出 pad，并在仿真中开 X 传播检查</td></tr>
+<tr><td><strong>撤离顺序</strong></td><td>同时撤离 / 按序撤离（reset sequencing）</td><td>一般原则：时钟先稳定再撤复位；<strong>下游先撤、上游后撤</strong>，避免下游还在复位时收到上游发出的垃圾数据</td></tr>
+<tr><td><strong>电源域</strong></td><td>跨电源域复位 / isolation / retention</td><td>UPF 里复位信号跨域时常需要 isolation 并 clamp 到<strong>有效态</strong>（即保持复位），而不是 clamp 到 0 或 1 的字面值</td></tr>
+<tr><td><strong>DFT</strong></td><td>功能复位 / <code>test_mode</code> 下复位旁路</td><td>scan shift 期间异步复位必须被强制 disable，否则扫描链被清空。通常写成 <code>rst_n_dft = test_mode ? scan_rst_n : rst_n</code></td></tr>
+<tr><td><strong>跨域</strong></td><td>RDC（Reset Domain Crossing）</td><td>两个复位域之间传数据，复位释放不同步会导致误采。需专用工具扫描（见 2.3）</td></tr>
+<tr><td><strong>最小脉宽</strong></td><td>异步复位的 <code>t_rw</code> 约束</td><td>库里对 <code>RN</code> 有最小脉宽要求，窄于它的复位脉冲可能只清掉一部分 FF，造成<strong>部分复位</strong>这种最难查的状态</td></tr>
+</table>
+
+<h2 id="2">2. 异步复位的两种撤离方式</h2>
+<p>断言选异步已经没有悬念（1.4），剩下的问题只有一个：<strong>撤离怎么做</strong>。工业界给出了两条路——<strong>同步撤离</strong>（2.1–2.4，用复位同步器把撤离沿钉在时钟沿上）和<strong>异步撤离</strong>（2.5，让撤离发生在没有时钟沿的时刻）。先看前者。</p>
+<p>同步撤离的思路是把两者的优点拼起来：<strong>断言走异步路径（立即生效、不依赖时钟），撤离走同步路径（对齐时钟沿、消除亚稳态）</strong>。英文叫 <em>Asynchronous Assert, Synchronous De-assert</em>。</p>
 <h3 id="2-1">2.1 复位同步器标准实现</h3>
 <pre><code>module reset_sync (
     input  wire clk,
@@ -168,6 +311,382 @@ reset_sync u_rst_sync_pwm (.clk(clk_pwm), .rst_async_n(por_n), .rst_sync_n(rst_p
 <div class="warn">
 <p><strong>RDC（Reset Domain Crossing）</strong>：如果信号从 <code>rst_cpu_n</code> 域的 FF 传到 <code>rst_ddr_n</code> 域的 FF，而两个复位的释放时刻不同步，就存在 RDC 风险——源 FF 已被复位清零，目标 FF 还在正常工作并采到了这个「复位引起的跳变」，可能被误当成有效数据。这类问题普通 CDC 检查抓不到，需要用 Spyglass RDC / Questa CDC 的 RDC 模式专门扫描。</p>
 </div>
+<h3 id="2-4">2.4 同步撤离的两种实现：高频撤离 vs 低频撤离</h3>
+<p>确定了「同步撤离」之后还有一个经常被忽略的选择：<strong>同步器用哪个时钟？</strong>用功能时钟本身，还是专门引一个慢时钟？这就是高频撤离与低频撤离的分野。</p>
+<div class="diagram">【高频撤离】同步器挂在功能时钟上
+                              ┌──────────┐
+  por_n ──────────────────────┤ rst_sync ├──→ rst_n ──→ 复位树 ──→ 成千上万个 FF
+                              │  (2-FF)  │                            ▲
+  clk_core (1 GHz) ───┬───────┤ clk      │                            │
+                      │       └──────────┘                            │
+                      └────────────── clock tree ─────────────────────┘
+  撤离预算 = 1 × T_core = 1 ns   ← 复位树延迟必须塞进 1 ns，高频下极难
+
+
+【低频撤离】同步器挂在慢时钟上
+                              ┌──────────┐
+  por_n ──────────────────────┤ rst_sync ├──→ rst_n ──→ 复位树 ──→ 成千上万个 FF
+                              │  (2-FF)  │                            ▲
+  clk_slow (10 MHz) ──────────┤ clk      │                            │
+                              └──────────┘                            │
+  clk_core (1 GHz) ─────────────────────────── clock tree ────────────┘
+  撤离预算 = 1 × T_slow = 100 ns  ← 复位树随便走，recovery 轻松收敛</div>
+<table>
+<tr><th>维度</th><th>高频撤离</th><th>低频撤离</th></tr>
+<tr><td>同步器时钟</td><td>功能时钟本身</td><td>专用慢时钟（晶振 / 分频 / always-on clock）</td></tr>
+<tr><td>recovery 预算</td><td>1 × T<sub>fast</sub>，GHz 下不足 1 ns</td><td>1 × T<sub>slow</sub>，可达几十上百 ns</td></tr>
+<tr><td>时序收敛难度</td><td><strong>很难</strong>，往往要靠 MCP + 流水分发</td><td><strong>容易</strong>，复位树几乎不用特殊处理</td></tr>
+<tr><td>撤离延迟</td><td>小（2 个快周期）</td><td>大（2 个慢周期，可能几百 ns）</td></tr>
+<tr><td>与功能时钟的关系</td><td>同域，撤离沿与功能时钟沿关系确定</td><td><strong>异域</strong>，撤离沿相对功能时钟是异步的</td></tr>
+<tr><td>适用</td><td>对复位撤离延迟敏感、或没有可用慢时钟</td><td>大 SoC、高频核、复位树巨大</td></tr>
+</table>
+<div class="warn">
+<p><strong>低频撤离的隐藏代价</strong>：同步器输出 <code>rst_n</code> 是在 <code>clk_slow</code> 域产生的，而它要去复位 <code>clk_core</code> 域的 FF。虽然撤离沿变慢了、预算变大了，但这个撤离沿与 <code>clk_core</code> 之间<strong>仍然是异步关系</strong> —— 本质上并没有消除亚稳态，只是把亚稳态窗口相对整个慢周期的占比压到了极小。</p>
+<p>所以严格的做法是<strong>两级同步</strong>：慢时钟域先同步一次（拿到足够的分发时间），再在功能时钟域补一个同步器（消除相对功能时钟的亚稳态）。或者接受这个风险并在 STA 中按 <code>clk_slow → clk_core</code> 的 recovery 路径正常签核。</p>
+</div>
+<div class="note">
+<p>工程上最常见的折中：<strong>低频撤离 + 功能域补一级同步器</strong>。慢时钟负责「让复位树有充足时间铺开」，功能域那一级负责「把撤离沿钉在功能时钟沿上」。两者各管一件事，互不冲突。具体实现见 <a href="#2-4-1">2.4.1</a>。</p>
+</div>
+
+<h4 id="2-4-1">2.4.1 两级同步器的代码实现</h4>
+<p>这个折中方案落到 RTL 上就是<strong>两级串联的复位同步器</strong>。但要注意：两级的「职责分工」主要体现在<strong>挂哪个时钟、摆在哪里、怎么约束</strong>上，而不在代码结构上 —— 两个模块的 RTL 写法几乎完全一样。</p>
+
+<h5>（1）整体拓扑</h5>
+<p>关键是分清两条复位网络，它们的物理尺度和定时方式完全不同。</p>
+<div class="diagram">                     ┌─────────────────┐
+  por_n ─────────────┤ stage 1         │
+  (PMU/POR/WDT 聚合) │ rst_sync_global │
+  clk_slow (10 MHz)──┤ (always-on 域)  │
+                     └────────┬────────┘
+                              │ rst_glb_n
+                              │  ← 【全局网络】跨 die 走线，普通信号线
+                              │     不做 recovery/removal 定时
+                              │     只用 set_max_delay 卡住绝对延迟
+          ┌───────────────────┼───────────────────┐
+          │                   │                   │
+   ┌──────┴──────┐     ┌──────┴──────┐     ┌──────┴──────┐
+   │ stage 2     │     │ stage 2     │     │ stage 2     │
+   │ rst_sync_   │     │ rst_sync_   │     │ rst_sync_   │
+   │ local       │     │ local       │     │ local       │
+   │ clk_core    │     │ clk_periph  │     │ clk_ddr     │
+   └──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+          │ rst_core_n        │                   │
+          │  ← 【本域复位树】只在本 partition 内分发
+          │     真实 recovery/removal，预算 1×T_core
+    ┌─────┴─────┐
+    ▼     ▼     ▼
+   FF    FF    FF  ... 本域成千上万个 FF</div>
+<div class="note">
+<p>一句话概括：<strong>stage 1 的输出是一条「不定时的长线」，stage 2 的输出是一棵「要定时的短树」</strong>。长线靠慢周期吃掉延迟，短树靠局部性塞进快周期。</p>
+</div>
+
+<h5>（2）Stage 1：全局慢时钟同步器（整芯片一个）</h5>
+<pre><code>//==============================================================
+// stage 1 : 挂慢时钟，负责「让复位网络有充足时间铺开」
+//           放在 always-on 电源域
+//==============================================================
+module rst_sync_global #(
+    parameter STAGES = 2
+)(
+    input  wire clk_slow,     // always-on 慢时钟（32 kHz / 晶振 / 分频）
+    input  wire por_n,        // 原始异步复位，POR/BOR/WDT/JTAG 聚合后
+    output wire rst_glb_n     // 异步断言 + clk_slow 域同步撤离
+);
+    reg [STAGES-1:0] sync_q;
+
+    always @(posedge clk_slow or negedge por_n) begin
+        if (!por_n) sync_q &lt;= {STAGES{1'b0}};
+        else        sync_q &lt;= {sync_q[STAGES-2:0], 1'b1};
+    end
+
+    assign rst_glb_n = sync_q[STAGES-1];
+endmodule</code></pre>
+
+<h5>（3）Stage 2：功能域本地同步器（每个时钟域一个）</h5>
+<pre><code>//==============================================================
+// stage 2 : 挂功能时钟，负责「把撤离沿钉在功能时钟沿上」
+//           每个时钟域一个实例，物理上贴着它要复位的 FF 群摆放
+//==============================================================
+module rst_sync_local #(
+    parameter STAGES = 2
+)(
+    input  wire clk,          // 本域功能时钟
+    input  wire rst_glb_n,    // 来自 stage 1，相对 clk 是异步的
+    input  wire soft_rst_n,   // 本域软复位（可选），1 表示不复位
+    output wire rst_n         // 本域复位，驱动本域复位树
+);
+    // 复位源聚合：必须是干净的 FF 输出相与，不能有组合毛刺
+    wire rst_async_n = rst_glb_n &amp; soft_rst_n;
+
+    reg [STAGES-1:0] sync_q;
+
+    always @(posedge clk or negedge rst_async_n) begin
+        if (!rst_async_n) sync_q &lt;= {STAGES{1'b0}};
+        else              sync_q &lt;= {sync_q[STAGES-2:0], 1'b1};
+    end
+
+    assign rst_n = sync_q[STAGES-1];
+endmodule</code></pre>
+
+<h5>（4）顶层连接</h5>
+<pre><code>module rst_ctrl_top (
+    input  wire clk_slow,
+    input  wire clk_core,
+    input  wire clk_periph,
+    input  wire por_n,
+    input  wire soft_rst_core_n,    // 来自 always-on 域的配置寄存器
+    input  wire soft_rst_periph_n,
+    output wire rst_core_n,
+    output wire rst_periph_n
+);
+    wire rst_glb_n;
+
+    rst_sync_global #(.STAGES(2)) u_rst_glb (
+        .clk_slow  (clk_slow),
+        .por_n     (por_n),
+        .rst_glb_n (rst_glb_n)
+    );
+
+    // 高频核：用 3 级提高 MTBF
+    rst_sync_local #(.STAGES(3)) u_rst_core (
+        .clk        (clk_core),
+        .rst_glb_n  (rst_glb_n),
+        .soft_rst_n (soft_rst_core_n),
+        .rst_n      (rst_core_n)
+    );
+
+    rst_sync_local #(.STAGES(2)) u_rst_periph (
+        .clk        (clk_periph),
+        .rst_glb_n  (rst_glb_n),
+        .soft_rst_n (soft_rst_periph_n),
+        .rst_n      (rst_periph_n)
+    );
+endmodule</code></pre>
+
+<h5>（5）波形：两级各自吃掉多少时间</h5>
+<div class="diagram">                  ┌─ 断言：全程异步，不等任何时钟沿 ─┐
+clk_slow    ──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──   T=100ns
+              │ │  │ │  │ │  │ │  │ │  │ │  │ │  │ │
+por_n       ──┐                    ┌──────────────────────
+              └────────────────────┘
+               ↓ 异步，立刻
+rst_glb_n   ──┐                               ┌───────────
+              └───────────────────────────────┘
+               ↑ por_n 一掉立即拉低            ↑ por_n 抬起后
+                 (穿过 FF 的 RN 脚)              2 个慢沿才释放
+                                                = 最多 200 ns
+clk_core    ─┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌┐┌─  T=1ns
+              └┘└┘└┘└┘└┘└┘└┘└┘└┘└┘└┘└┘└┘└┘└┘└┘└┘└┘└┘└┘
+rst_core_n  ──┐                                  ┌────────
+              └──────────────────────────────────┘
+               ↑ 跟着 rst_glb_n 异步拉低          ↑ rst_glb_n 抬起后
+                                                   3 个 core 沿才释放
+                                                   = 3 ns，且沿与 clk_core 对齐</div>
+<ul>
+<li><strong>断言方向</strong>：<code>por_n → stage1 的 RN → rst_glb_n → stage2 的 RN → rst_core_n</code>，全程走触发器的异步复位脚，<strong>没有任何时钟参与</strong>，所以上电无时钟也能复位 —— 异步断言的本质没被破坏。</li>
+<li><strong>撤离方向</strong>：先在慢域花 2 个慢周期，再在快域花 3 个快周期。最终 <code>rst_core_n</code> 的上升沿是由一个 <code>clk_core</code> 域的触发器发出的，这就是「钉在功能时钟沿上」。</li>
+</ul>
+
+<h5>（6）为什么说「两者各管一件事，互不冲突」</h5>
+<p>这是整个方案的核心，用预算数字说明最清楚。假设 <code>clk_core</code> = 1 GHz（T = 1 ns），<code>clk_slow</code> = 10 MHz（T = 100 ns）：</p>
+<table>
+<tr><th>维度</th><th>全局网络 <code>rst_glb_n</code></th><th>本域复位树 <code>rst_core_n</code></th></tr>
+<tr><td>物理尺度</td><td>跨整个 die，几毫米</td><td>单个 partition 内</td></tr>
+<tr><td>实际延迟</td><td>~2.5 ns（长线 + buffer 链）</td><td>~0.45 ns</td></tr>
+<tr><td>可用预算</td><td>1 × T<sub>slow</sub> = 100 ns</td><td>1 × T<sub>core</sub> = 1 ns</td></tr>
+<tr><td>定时方式</td><td><strong>不做</strong> recovery/removal，只 <code>set_max_delay</code> 封顶</td><td><strong>真实</strong> recovery/removal 签核</td></tr>
+<tr><td>为什么够</td><td>2.5 ns ≪ 100 ns，随便走</td><td>0.45 + t<sub>rec</sub> 0.1 + skew 0.2 = 0.75 ns &lt; 1 ns</td></tr>
+</table>
+<p>对比两种单级方案的失败点：</p>
+<div class="bad">
+<p><strong>纯高频撤离</strong>（只有 stage 2，直接挂 <code>por_n</code>）：那条跨 die 的全局线要在 1 ns 内走完 → 不可能。</p>
+<p><strong>纯低频撤离</strong>（只有 stage 1）：<code>rst_glb_n</code> 直接去复位 1 GHz 的叶子 FF。预算看似 100 ns，但 <strong>recovery 检查的捕获沿是 <code>clk_core</code> 的沿</strong>，STA 找最差沿对时仍然只给 1 × T<sub>core</sub>；而且撤离沿相对 <code>clk_core</code> 是异步的，叶子 FF 自己会亚稳态。</p>
+</div>
+<div class="good">
+<p><strong>两级组合后</strong>：长距离那段的撤离沿被声明为「不定时」（因为下游有 stage 2 兜住亚稳态），短距离那段才去跟 1 ns 较劲。<strong>两个难点被拆到了两个不同的时间尺度上</strong>，所以互不冲突。</p>
+</div>
+
+<h5>（7）SDC 约束：方案真正落地的地方</h5>
+<pre><code>#--------------------------------------------------------------
+# 1. 时钟定义
+#--------------------------------------------------------------
+create_clock -name clk_core   -period 1.000  [get_ports clk_core]
+create_clock -name clk_periph -period 10.000 [get_ports clk_periph]
+create_clock -name clk_slow   -period 100.00 [get_ports clk_slow]
+
+# 慢时钟与功能时钟按异步处理。
+# 即使 clk_slow 是 clk_core 分频得来的，也刻意声明为异步 ——
+# 因为 stage 2 的存在使得 rst_glb_n 的撤离沿无需定时。
+set_clock_groups -asynchronous \
+    -group {clk_slow} \
+    -group {clk_core} \
+    -group {clk_periph}
+
+#--------------------------------------------------------------
+# 2. 全局网络 rst_glb_n：不定时，但必须卡死绝对延迟与 skew
+#--------------------------------------------------------------
+set rst_glb_src [get_pins u_rst_glb/sync_q_reg[1]/Q]
+set rst_glb_dst [get_pins -hier * -filter \
+                 "full_name =~ *u_rst_*/sync_q_reg*/RN"]
+
+# 上面 set_clock_groups 已经把这条路径 false_path 掉了，
+# 所以必须用 max_delay 把延迟重新管起来，否则工具会任其疯长
+set_max_delay 3.0 -datapath_only -from $rst_glb_src -to $rst_glb_dst
+set_min_delay 0.5                -from $rst_glb_src -to $rst_glb_dst
+
+#--------------------------------------------------------------
+# 3. 本域复位树：真实 recovery/removal，按 clock-like net 处理
+#--------------------------------------------------------------
+# 让 CTS 像时钟一样平衡本域复位树
+# （命令名随工具而异：ICC2 / Innovus / Fusion Compiler 写法不同）
+set_clock_routing_rule -net_type reset \
+    -rule NDR_2W1S [get_nets u_rst_core/rst_n]
+
+#--------------------------------------------------------------
+# 4. 保护同步器不被优化掉
+#--------------------------------------------------------------
+set_dont_touch [get_cells {u_rst_glb u_rst_core u_rst_periph}]
+# 禁止 clone / merge / retime 同步器 FF，只允许改驱动强度
+set_size_only -all_instances [get_cells -hier *sync_q_reg*]
+# 复位源聚合的那个 AND 门也要锁住，不能被拆成多级或复制
+set_dont_touch [get_cells -hier *rst_async_n*]
+
+#--------------------------------------------------------------
+# 5. 断言边不是时序问题，别让它污染报告
+#--------------------------------------------------------------
+# por_n 的断言沿经异步脚传播，正确性由「最小复位脉宽 + 保持足够长」保证，
+# 不由 setup/hold 保证
+set_false_path -from [get_ports por_n]
+
+#--------------------------------------------------------------
+# 6. 实在收不进 1 个周期时，才动 MCP（见第 13 章）
+#--------------------------------------------------------------
+# set_multicycle_path -setup 2 -from [get_pins u_rst_core/sync_q_reg[2]/Q]
+# set_multicycle_path -hold  1 -from [get_pins u_rst_core/sync_q_reg[2]/Q]</code></pre>
+<div class="warn">
+<p>第 2、6 条各有一个容易踩的坑：</p>
+<p><strong>（a）<code>set_clock_groups -asynchronous</code> 会连带 false_path 掉 <code>rst_glb_n</code> 的所有路径。</strong>很多人只写了 clock group 就以为完事，结果这条跨 die 的复位线没有任何延迟约束，布线后实际延迟 15 ns，各域撤离顺序彻底乱掉。必须补 <code>set_max_delay -datapath_only</code>。</p>
+<p><strong>（b）本域树上加 MCP 的前提，恰好是由 stage 1 提供的。</strong>MCP <code>-setup 2</code> 的含义是「允许叶子 FF 的撤离沿晚到 2 个周期」，即各 FF 出复位的时刻是错开的。这只有在「撤离后有一段静默期、没有功能行为」时才安全（见 <a href="#4-3">4.3</a>）。而 stage 1 让复位保持了几百 ns，天然提供了这个静默期 —— <strong>两级方案和 MCP 是互相成就的</strong>。</p>
+</div>
+
+<h5>（8）三个工程细节</h5>
+<p><strong>软复位寄存器不能放在被它复位的域里。</strong><code>soft_rst_core_n</code> 如果由 <code>clk_core</code> 域、且被 <code>rst_core_n</code> 复位的寄存器产生，那它一旦置位就会把自己复位掉，<code>soft_rst_n</code> 被清回默认值 —— 要么复位永远出不来，要么变成一个不可控的脉冲。正确做法是把软复位寄存器放在 always-on / 慢时钟域，或做成「写 1 自清、带脉冲展宽」的结构。</p>
+<p><strong><code>clk_slow</code> 必须在复位期间真的在跑。</strong><code>rst_glb_n</code> 的撤离依赖 <code>clk_slow</code> 有沿。如果慢时钟来自一个需要软件使能的时钟门控，就构成死锁环路（与 <a href="#6-4">6.4</a> 的波形三同类问题）。<code>clk_slow</code> 必须是 always-on、免门控的。</p>
+<p><strong>DFT：scan shift 期间必须能屏蔽异步复位。</strong></p>
+<pre><code>// 通常由 DFT 工具自动插入，这里仅作示意
+wire rst_async_n = (rst_glb_n &amp; soft_rst_n) | scan_mode;</code></pre>
+<p>注意这个 mux/or 加在<strong>异步复位脚的路径上</strong>，会增加复位网络延迟，而且必须 <code>set_dont_touch</code>。同时 <code>scan_mode</code> 本身要在 shift 前稳定。</p>
+
+<h5>（9）验证</h5>
+<p>SVA 挂在 stage 2 的输出上：</p>
+<pre><code>// (1) 撤离沿必须由 clk 沿产生：rst_n 的上升只能发生在 clk 上升沿后
+property p_deassert_aligned;
+    @(negedge clk) $rose(rst_core_n) == 0;
+endproperty
+assert property (p_deassert_aligned);
+
+// (2) 一旦断言，至少保持 MIN_CYC 个功能周期（给静默期和 MCP 兜底）
+property p_min_assert;
+    @(posedge clk_core) $fell(rst_core_n) |=&gt; !rst_core_n [*MIN_CYC];
+endproperty
+assert property (p_min_assert);
+
+// (3) 全局复位抬起之前，por_n 必须已稳定高至少 2 个慢周期
+property p_glb_order;
+    @(posedge clk_slow) $rose(rst_glb_n) |-&gt; $past(por_n, 1) &amp;&amp; $past(por_n, 2);
+endproperty
+assert property (p_glb_order);</code></pre>
+<p>CDC 工具检查清单（Spyglass / Questa CDC）：</p>
+<table>
+<tr><th>检查项</th><th>期望结果</th></tr>
+<tr><td><code>Ar_sync_group</code> / <code>Reset_sync</code></td><td>识别出 stage1、stage2 两个合法同步器</td></tr>
+<tr><td><code>Ar_asyncdeassert</code></td><td>无 violation（所有异步复位都经过同步撤离）</td></tr>
+<tr><td><code>Ar_resetcross</code> / RDC</td><td><code>rst_glb_n</code> → <code>rst_core_n</code> 属于<strong>预期的</strong> RDC，需加 waiver 并写明理由</td></tr>
+<tr><td><code>Ar_glitch</code></td><td>复位源聚合的 AND 门不产生毛刺（两输入不会同时翻转）</td></tr>
+<tr><td><code>Clock_sync_group</code></td><td><code>clk_slow</code> / <code>clk_core</code> 被正确识别为异步域</td></tr>
+</table>
+<p>STA 报告确认：</p>
+<pre><code># 本域复位树的 recovery 必须被真实检查，不能是 false path
+report_timing -delay_type max -to [get_pins -hier *_reg/RN] \
+              -path_type full_clock_expanded -nworst 20
+
+# 确认全局线没有被 false_path 之后就彻底失管
+report_timing -from $rst_glb_src -to $rst_glb_dst -delay_type max
+
+# 确认约束没被忽略
+report_exceptions -ignored
+report_analysis_coverage -status_details untested</code></pre>
+
+<h3 id="2-5">2.5 异步复位、异步撤离：靠流程保证</h3>
+<p>导图中的另一条常用分支。它的思路完全不同：<strong>不去解决撤离时的亚稳态，而是让撤离发生在一个根本不存在时钟沿的时刻。</strong></p>
+<h4>工作流程</h4>
+<div class="diagram">时间轴 ─────────────────────────────────────────────────────────→
+
+  ① 上电 / 进入复位
+     por_n   ───┐
+                └──────────────────────────────────────────────
+     clk     （关闭 / 未起振 / 被门控）
+                ░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+
+  ② 复位期间保持时钟关闭，等 PLL 锁定
+     pll_lock ───────────────┌──────────────────────────────────
+                ─────────────┘
+
+  ③ 异步撤离复位 —— 此刻没有任何时钟沿
+     por_n   ──────────────────────┌───────────────────────────
+                                   │  ← 撤离沿落在"无时钟"区间
+     clk        ░░░░░░░░░░░░░░░░░░░░░░░░░
+                                        ↑ 此时仍未开时钟
+
+  ④ 确认复位已在全芯片铺开（等待 N 个慢周期 / 握手确认）后，才打开时钟
+     clk_en  ─────────────────────────────┌──────────────────────
+     clk        ░░░░░░░░░░░░░░░░░░░░░░░░░░┘_┌─┐_┌─┐_┌─┐_┌─┐_┌─
+                                            ↑ 第一个时钟沿到来时，
+                                              rst_n 早已稳定为 1
+
+  关键：撤离沿与第一个时钟沿之间有巨大间隔 → recovery 天然满足</div>
+<h4>为什么它成立</h4>
+<ul>
+<li>recovery / removal 检查的本质是「撤离沿 与 时钟沿 的相对位置」。<strong>撤离时没有时钟沿，这个检查就不存在</strong></li>
+<li>时钟打开时，<code>rst_n</code> 已经稳定高电平很久了，第一个有效沿看到的是一个完全确定的值</li>
+<li>复位树再大也无所谓 —— 它有「从撤离到开时钟」这整段时间去铺开，而这段时间由上层流程控制，可以是任意长</li>
+</ul>
+<h4>适用场景</h4>
+<ul>
+<li><strong>上电流程</strong>：PMU / PMIC 控制的上电序列天然就是「先复位 → 等电源与 PLL 稳 → 撤复位 → 开时钟」</li>
+<li><strong>低功耗唤醒</strong>：从 deep sleep 退出时，时钟本来就是关的</li>
+<li><strong>带时钟门控的模块级复位</strong>：先关门控 → 断言复位 → 撤离复位 → 再开门控</li>
+<li><strong>极高频设计</strong>：当 <a href="#4">第 4 章</a> 说的 recovery 预算在物理上已经不可解时，这是少数可行的出路</li>
+</ul>
+<div class="bad">
+<p><strong>它的风险全在「流程」两个字上。</strong></p>
+<ul>
+<li>流程由 PMU 状态机 / 固件 / 上电序列控制，一旦某条路径上有人<strong>在复位还没撤干净时就打开了时钟</strong>，recovery 违例立刻回来，而且这次没有任何 STA 保护</li>
+<li>流程正确性<strong>无法由 STA 签核</strong>。STA 看到的是「撤离路径没有时钟沿要检查」，它不会告诉你流程写错了</li>
+<li>验证必须靠 <strong>SVA 断言</strong>覆盖：在 <code>clk</code> 的第一个有效沿处断言 <code>rst_n</code> 已稳定足够长时间</li>
+<li>异常路径最容易出事：<strong>看门狗复位、调试器复位、热复位</strong>这些可能在时钟正在跑的时候触发 —— 此时撤离沿就落在有时钟的区间里，前提被打破</li>
+</ul>
+</div>
+<div class="good">
+<p><strong>工程做法</strong>：对「时钟一定关闭」的复位源（POR、deep sleep 唤醒）用异步撤离；对「时钟可能在跑」的复位源（看门狗、软复位、调试复位）<strong>仍然必须</strong>配复位同步器走同步撤离。</p>
+<p>两条路径最后用一个与门合并：<code>rst_n = por_n_async &amp; soft_rst_n_sync</code>。</p>
+</div>
+
+<h3 id="2-6">2.6 三种方案横向对比</h3>
+<table>
+<tr><th>维度</th><th>异步断言 + 高频同步撤离</th><th>异步断言 + 低频同步撤离</th><th>异步断言 + 异步撤离</th></tr>
+<tr><td>撤离亚稳态</td><td>由同步器消除</td><td>基本消除（占比极小）</td><td>不存在（无时钟沿）</td></tr>
+<tr><td>recovery / removal</td><td><strong>必须收敛</strong>，高频下很难</td><td>必须收敛，但预算很宽松</td><td><strong>无需检查</strong></td></tr>
+<tr><td>复位树约束压力</td><td>极大，需 CTS 特殊处理 + MCP</td><td>小</td><td>无</td></tr>
+<tr><td>撤离延迟</td><td>2 个快周期，最短</td><td>2 个慢周期，较长</td><td>取决于流程，通常最长</td></tr>
+<tr><td>正确性由谁保证</td><td>STA 签核</td><td>STA 签核</td><td><strong>上层流程 + SVA</strong></td></tr>
+<tr><td>对异常复位源的鲁棒性</td><td>好</td><td>好</td><td><strong>差</strong>，时钟在跑时前提失效</td></tr>
+<tr><td>典型应用</td><td>中低频模块、对撤离延迟敏感的场合</td><td>大 SoC 主流做法</td><td>上电序列、低功耗唤醒、极高频核</td></tr>
+</table>
+<div class="note">
+<p><strong>实际 SoC 通常三者并存</strong>：POR 走异步撤离（上电本来就没时钟）；系统级复位走低频同步撤离（复位树大）；模块内的局部软复位走高频同步撤离（范围小、要求响应快）。关键是每一条复位路径都要能说清楚「我属于哪一种，正确性靠什么保证」。</p>
+</div>
+
 <h2 id="3">3. 时序收敛：recovery / removal</h2>
 <p>用了「异步复位、同步释放」之后，<code>rst_sync_n</code> 到各个 FF 复位端的这段路径就成了一条<strong>需要被 STA 签核的真实时序路径</strong>。它不再是 false path。</p>
 <h3 id="3-1">3.1 两个检查的定义</h3>
@@ -247,9 +766,744 @@ set_app_var timing_remove_clock_reconvergence_pessimism true</code></pre>
 <div class="bad">
 <p>在 2 GHz 下，一个全芯片范围的复位网络、跨越几毫米、驱动上万个 FF，物理上<strong>不可能</strong>把延迟压到 0.05 ns。这时再怎么调 SDC 都没用，必须改架构。</p>
 </div>
-BODY1
+<h3 id="4-2">4.2 其他高频难点</h3>
+<h4>（1）亚稳态 MTBF 随频率恶化</h4>
+<div class="formula">MTBF ∝ exp(T<sub>settle</sub> / τ) / (f<sub>clk</sub> × f<sub>data</sub>)</div>
+<p>两级同步器留给 <code>r1</code> 的 settle 时间就是一个周期减去余量。频率翻倍，<code>T_settle</code> 减半，而指数项是急剧下降的——<strong>MTBF 可能恶化几个数量级</strong>。高频下两级往往不够，需要三级甚至四级。</p>
+<h4>（2）复位树 skew 带来的「分批释放」</h4>
+<p>高频下即使 recovery/removal 都收敛了，复位树上不同 FF 的释放时刻仍可能相差超过一个周期。结果是电路「分批」退出复位：</p>
+<div class="diagram">clk       ─┐_┌─┐_┌─┐_┌─┐_┌─┐_┌─
+rst_near  ──┐   ┌───────────────   近端 FF 在 cycle 2 退出
+            └───┘
+rst_far   ──┐       ┌───────────   远端 FF 在 cycle 3 才退出
+            └───────┘
+                ↑
+          此刻近端已开始工作，远端还在复位
+          → 状态机可能跳进非法状态</div>
+<h4>（3）OCV / derate 的放大效应</h4>
+<p>先进工艺下 on-chip variation 的绝对值不随频率降低，但相对于周期的占比急剧上升。1 GHz 下 50 ps 的 derate 就是 5% 的周期预算，recovery 路径本来余量就小，derate 一加就红。</p>
+<h3 id="4-3">4.3 解法</h3>
+<h4>（1）分级流水复位分发（最常用）</h4>
+<p>不要让一个同步器的输出直接跨越全芯片。在每个区域/模块入口再打一拍，把长路径切成多段短路径。</p>
+<pre><code>module rst_pipe_node (
+    input  wire clk,
+    input  wire rst_in_n,
+    output reg  rst_out_n
+);
+    always @(posedge clk or negedge rst_in_n) begin
+        if (!rst_in_n) rst_out_n &lt;= 1'b0;   // 断言仍然异步、立即
+        else           rst_out_n &lt;= 1'b1;   // 释放再同步一拍
+    end
+endmodule</code></pre>
+<div class="diagram">                 ┌─ rst_pipe_node ─→ 区域 A 的 FF
+reset_sync ──→ ──┼─ rst_pipe_node ─→ 区域 B 的 FF
+  (root)         └─ rst_pipe_node ─→ 区域 C 的 FF
+
+每一跳都是一段短路径，recovery 预算独立计算
+代价：各区域退出复位的时刻相差 1 拍</div>
+<div class="good">
+<p>这个结构的好处是：<strong>断言方向仍然是纯异步的</strong>（<code>rst_in_n</code> 直通每级的异步复位端，断言瞬间全链路同时清零），只有释放方向被流水化。断言的即时性没有牺牲。</p>
+</div>
+<h4>（2）架构级静默期（quiet period）</h4>
+<p>如果从架构上能保证「复位释放后的前 N 个周期内，电路不做任何有意义的事」，那各区域差几拍退出复位就无所谓了。</p>
+<ul>
+<li>复位释放后插入固定的等待计数器，等所有区域都确认退出复位再放行数据</li>
+<li>这期间所有 valid / enable 信号都强制为 0</li>
+<li>有了静默期兜底，才敢放宽 recovery 约束（这就是 <a href="#13">第 13 章</a> 里 <code>-setup 9</code> 的架构前提）</li>
+</ul>
+<h4>（3）反向释放顺序</h4>
+<p>让<strong>下游先退出复位，上游后退出</strong>。这样上游开始产生数据时，下游已经准备好接收，不会出现「下游还在复位却收到了数据」的情况。</p>
+<h4>（4）多周期约束放宽 recovery</h4>
+<p>如果有静默期兜底，就可以用 <code>set_multicycle_path</code> 把 recovery 检查沿往后推，让复位树有多个周期的预算。这是 <a href="#P2">第二部分</a> 的主题。</p>
+<h4>（5）低频复位时钟域</h4>
+<p>把复位同步器放在一个<strong>低频时钟</strong>域（如 PMU 的 32 kHz 或分频后的慢时钟），复位树在慢时钟域里做同步，recovery 预算瞬间宽松几十倍。代价是复位释放的响应变慢。详见 <a href="#2-4">2.4 低频撤离</a>。</p>
+<h4>（6）改用异步撤离，绕开 recovery 检查</h4>
+<p>前面五条解法都在想办法「把复位树塞进有限的周期预算里」。还有一条根本不同的路：<strong>让撤离发生在没有时钟沿的时刻，recovery 检查就不存在了</strong>。</p>
+<p>先关时钟 → 断言复位 → 异步撤离复位 → 等复位在全芯片铺开 → 再开时钟。复位树的延迟不再受任何周期约束。代价是正确性从 STA 签核转移到了上层流程 + SVA。完整讨论见 <a href="#2-5">2.5</a>。</p>
+<div class="note">
+<p>在 2 GHz 这种 4.1 表里标注「基本不可能」的场景，<strong>（2）静默期 + （6）异步撤离</strong>往往是仅有的可行组合 —— 前者解决「分批退出复位」，后者解决「recovery 收不了」。</p>
+</div>
+<h2 id="5">5. 同步复位的适用场景</h2>
+<p>虽然 SoC 顶层复位架构普遍用「异步复位、同步释放」，但同步复位在下面这些场合是更优甚至唯一的选择。</p>
+<h3 id="5-1">5.1 FPGA 设计</h3>
+<p>FPGA 厂商（Xilinx/AMD、Intel/Altera）官方推荐同步复位，原因是架构决定的：</p>
+<ul>
+<li>FPGA 的 LUT/FF 上电时由 bitstream 自动初始化，不需要异步复位来建立初始状态；</li>
+<li>FF 的异步复位端（<code>PRE</code>/<code>CLR</code>）是专用布线资源，<strong>一个 slice 内的 FF 共享同一个控制集</strong>。异步复位信号太多会导致控制集爆炸，严重降低 slice 打包效率和布线资源利用率；</li>
+<li>同步复位可以被吸收进 LUT 的逻辑中，几乎不占额外资源；</li>
+<li>异步复位会阻止 FF 被用于 SRL（移位寄存器 LUT）或 DSP/BRAM 的内部流水寄存器，浪费硬核资源。</li>
+</ul>
+<h3 id="5-2">5.2 软复位 / 寄存器写触发的复位</h3>
+<p>CPU 通过 APB/AHB 写一个配置寄存器来复位某个外设。这个复位本身就是由总线时钟同步产生的，天然同步，没有理由走异步路径。</p>
+<pre><code>// 软复位：本身就是同步信号
+always @(posedge clk) begin
+    if (!rst_sync_n || soft_rst) begin   // soft_rst 来自寄存器
+        cnt &lt;= '0;
+    end else begin
+        cnt &lt;= cnt + 1'b1;
+    end
+end</code></pre>
+<h3 id="5-3">5.3 数据通路寄存器 / 深流水线</h3>
+<p>一条 20 级的乘累加流水线，中间级寄存器的值在复位后反正要被重新填充，不需要立即清零。用同步复位的好处：</p>
+<ul>
+<li>省掉几千个异步复位 FF 的面积（复位 FF 比普通 FF 大 10%~20%）</li>
+<li>这些 FF 不接入复位树，复位树的扇出大幅减小，recovery 收敛压力骤降</li>
+<li>甚至可以进一步<strong>完全不复位</strong>（no-reset FF），只靠 valid 位来保证数据有效性</li>
+</ul>
+<div class="good">
+<p><strong>实践建议</strong>：控制路径（状态机、计数器、配置寄存器）用异步复位同步释放；数据路径（流水线寄存器、FIFO 存储体）用同步复位或不复位 + valid 控制。这是面积与可靠性的最佳折中。</p>
+</div>
+<h3 id="5-4">5.4 对毛刺敏感的场合</h3>
+<p>如果复位信号要经过长距离布线、跨板、或来自噪声环境（比如外部按键、电源监测比较器的输出），异步复位会把线上任何窄脉冲都当成真复位。同步复位天然滤掉短于一个周期的毛刺。</p>
+<h3 id="5-5">5.5 DFT / scan 友好</h3>
+<p>同步复位走数据路径，scan chain 天然可控，不需要额外的 reset bypass 逻辑。异步复位则必须在 test mode 下把复位端接到可控源（通常是 <code>scan_rst_n</code> 或固定为无效），否则 scan shift 阶段会被意外复位。</p>
+<h3 id="5-6">5.6 仿真可复现性要求高的场合</h3>
+<p>异步复位的释放时刻与时钟沿的相对关系在 RTL 仿真里是确定的，但在门级仿真（带 SDF）里会暴露出 recovery 违例导致的 X 传播。同步复位行为完全确定，不存在这类 RTL/GLS 不一致。</p>
+<h2 id="6">6. 时钟门控场景的行为差异</h2>
+<p>时钟门控（clock gating）是低功耗设计的基本手段。它与复位的交互是实际项目中最容易出 bug 的地方——因为<strong>同步复位的生效前提是「有时钟沿」，而门控恰好把时钟沿拿掉了</strong>。</p>
+<h3 id="6-1">6.1 前提：ICG 单元</h3>
+<pre><code>// 典型 ICG（Integrated Clock Gating）单元
+// CP: 时钟输入   E: 使能   TE: test enable   Q: 门控后时钟
+CKLNQD4 u_icg (
+    .CP (clk_root),
+    .E  (module_req),      // 模块有活干时拉高
+    .TE (test_mode),
+    .Q  (clk_gated)
+);</code></pre>
+<p>ICG 内部有一个低电平锁存器，在时钟低电平期间采样 <code>E</code>，保证 <code>Q</code> 上不会出现毛刺。<code>E=0</code> 时 <code>Q</code> 停在低电平，<strong>没有任何上升沿</strong>。</p>
+<h3 id="6-2">6.2 波形一：复位在时钟已门控时断言</h3>
+<p>场景：模块进入休眠（<code>icg_en=0</code>，时钟停了），此时复位断言。</p>
+<div class="diagram">cycle        1     2     3     4     5     6     7     8     9
+clk_root   ─┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌─
+icg_en     ───────┐                             ┌──────────
+                  └─────────────────────────────┘
+                     ← 时钟门控窗口（无边沿）→
+clk_gated  ─┐_┌──┐_┌───────────────────────────┐_┌──┐_┌─
+                  ↑ 从这里开始无上升沿          ↑ 恢复
+
+rst_n      ─────────────┐
+                        └───────────────────────────────
+                        ↑ cycle 4 断言
+
+── 异步复位 FF ──
+q_async    ──X──X──X──┐
+                      └────────────────────────────────
+                      ↑ cycle 4 立即清零（不需要时钟）
+
+── 同步复位 FF ──
+q_sync     ──X──X──X──X──X──X──X──X──┐
+                                     └──────────────────
+                                     ↑ cycle 8 才清零
+                                    （等到门控恢复后的第一个沿）</div>
+<div class="note">
+<p><strong>结论</strong>：异步复位在 cycle 4 立即生效；同步复位要一直等到 cycle 8 时钟恢复后的第一个上升沿才生效，<strong>延迟了 4 个周期</strong>。在这 4 个周期内，同步复位 FF 保持着复位前的旧值。如果这个 FF 驱动的是 pad、电源开关或 PWM，这 4 个周期的「旧值残留」可能是致命的。</p>
+</div>
+<h3 id="6-3">6.3 波形二：复位脉冲完整落在门控窗口内（最危险）</h3>
+<p>场景：一个短复位脉冲（比如来自软复位寄存器的自清零脉冲）恰好完整地出现在时钟被门控的窗口里。</p>
+<div class="diagram">cycle        1     2     3     4     5     6     7     8     9
+clk_root   ─┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌─
+icg_en     ───────┐                       ┌────────────────
+                  └───────────────────────┘
+clk_gated  ─┐_┌──┐_┌─────────────────────┐_┌──┐_┌──┐_┌─
+
+rst_n      ─────────────┐     ┌──────────────────────────
+                        └─────┘
+                        ↑ cy4  ↑ cy6   ← 脉冲完整落在门控窗口内
+
+── 异步复位 FF（计数器，初值 1）──
+q_async     1    2    2 ─→│0│ 0    0    1    2    3
+                          ↑ cycle4 清零，之后门控期保持 0
+                          cycle 7 恢复时钟后从 0 开始计数
+                          最终值 = 2
+
+── 同步复位 FF（计数器，初值 1）──
+q_sync      1    2    2    2    2    2    3    4    5
+                                              ↑
+                        复位脉冲完全没被任何时钟沿采到
+                        → 复位被永久丢失！
+                        最终值 = 5</div>
+<div class="bad">
+<p><strong>这是同步复位最危险的失效模式：复位被永久丢失。</strong></p>
+<p>门控窗口内没有任何时钟上升沿，同步复位 FF 的 D 端虽然在 cycle 4~6 被复位逻辑拉到 0，但<strong>没有任何时钟沿来采样它</strong>。等 cycle 7 时钟恢复时，<code>rst_n</code> 已经回到 1，D 端又变回正常数据，复位信息彻底消失。</p>
+<p>结果：异步复位 FF 最终值 2，同步复位 FF 最终值 5——<strong>两组寄存器状态发散</strong>。如果它们本该保持一致（比如一对冗余计数器、或一个状态机的 one-hot 编码分散在两类 FF 里），系统进入不可预测状态。</p>
+</div>
+<h3 id="6-4">6.4 波形三：同步器挂门控时钟 → 死锁环路</h3>
+<p>这是一个常见的设计错误：把复位同步器的时钟接到了<strong>门控后</strong>的 <code>clk_gated</code>，同时门控使能又依赖复位状态。</p>
+<pre><code>// ✗ 错误：同步器用 clk_gated
+always @(posedge clk_gated or negedge rst_async_n) begin
+    if (!rst_async_n) {r2, r1} &lt;= 2'b00;
+    else              {r2, r1} &lt;= {r1, 1'b1};
+end
+assign rst_sync_n = r2;
+
+// ✗ 错误：门控使能要求模块「不在复位中」
+assign icg_en = module_req &amp; rst_sync_n;</code></pre>
+<div class="diagram">rst_async_n ──┐           ┌─────────────────────────────
+              └───────────┘
+                          ↑ 原始复位已释放
+
+rst_sync_n  ──┐
+              └─────────────────────────────────────────
+                          ↑ 永远卡在 0！
+
+icg_en = module_req &amp; rst_sync_n
+            ──┐
+              └─────────────────────────────────────────
+                          ↑ 因为 rst_sync_n=0，使能永远为 0
+
+clk_gated   ──┐_┌──┐_┌───────────────────────────────────
+                          ↑ 永远没有上升沿
+
+        ┌─────────────────────────────────────────┐
+        │  死 锁 环 路                             │
+        │                                         │
+        │  rst_sync_n = 0                         │
+        │       ↓                                 │
+        │  icg_en = 0                             │
+        │       ↓                                 │
+        │  clk_gated 无上升沿                      │
+        │       ↓                                 │
+        │  同步器拿不到时钟沿，r1/r2 无法置 1       │
+        │       ↓                                 │
+        │  rst_sync_n 永远 = 0  ──────────────────┘
+        └─────────────────────────────────────────┘
+
+        → 芯片永久卡死在复位状态，只能断电重启</div>
+<div class="bad">
+<p>这类 bug 在 RTL 仿真中<strong>可能被掩盖</strong>（如果 testbench 里 <code>module_req</code> 一直是 1 并且 ICG 被建模为理想的与门，波形看起来可能正常）。但在门级仿真或硅上，一旦进入这个状态就是硬死锁。CDC/结构检查工具通常能报出「reset 依赖 gated clock」的环路，务必重视这类 warning。</p>
+</div>
+<h3 id="6-5">6.5 波形四：正确做法</h3>
+<p>两条铁律：<strong>同步器挂未门控的根时钟</strong>；<strong>复位期间强制打开门控</strong>。</p>
+<pre><code>// ✓ 同步器用 clk_root（未门控）
+always @(posedge clk_root or negedge rst_async_n) begin
+    if (!rst_async_n) {r2, r1} &lt;= 2'b00;
+    else              {r2, r1} &lt;= {r1, 1'b1};
+end
+assign rst_sync_n = r2;
+
+// ✓ 复位期间强制开启门控，保证复位能传播到所有 FF
+assign icg_en = module_req | ~rst_sync_n;
+
+CKLNQD4 u_icg (.CP(clk_root), .E(icg_en), .TE(test_mode), .Q(clk_gated));</code></pre>
+<div class="diagram">cycle        1     2     3     4     5     6     7     8
+clk_root   ─┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌─
+             （根时钟永不停，同步器一直有沿）
+
+rst_async_n ──────┐           ┌────────────────────────
+                  └───────────┘
+                              ↑ cycle 5 释放
+
+module_req ─────────────────────────────┐
+                                        └─────────────
+                              （模块此时并不想要时钟）
+
+rst_sync_n ──────┐                 ┌──────────────────
+                 └─────────────────┘
+                              ↑ cycle 5 释放后，
+                                两拍（cy6/cy7）同步完成
+
+icg_en = module_req | ~rst_sync_n
+           ───────┌─────────────────┐    ┌────────────
+                  │                 └────┘
+                  ↑ 复位期间被 ~rst_sync_n 强制为 1
+                                    ↑ 复位结束后交还给 module_req
+
+clk_gated  ─┐_┌──┐_┌──┐_┌──┐_┌──┐_┌──┐_┌─────┐_┌──
+             （复位全程有时钟沿 → 复位可靠传播）
+                                    ↑ 此后才允许门控</div>
+<div class="good">
+<p>要点总结：</p>
+<ul>
+<li>复位同步器的时钟必须来自<strong>未门控</strong>的根时钟（或至少是不受本模块复位影响的时钟）</li>
+<li><code>icg_en</code> 中用 <code>| ~rst_sync_n</code> 保证复位期间时钟一定在跑</li>
+<li>也可以用库里<strong>自带复位端的 ICG</strong>（如 <code>CKLNQRSTD*</code>），复位时硬件强制 <code>Q</code> 跟随 <code>CP</code></li>
+<li>只有确认复位已完全退出，才把门控权交还给功能逻辑</li>
+</ul>
+</div>
+<h3 id="6-6">6.6 门控场景对比小结</h3>
+<table>
+<tr><th>情形</th><th>异步复位</th><th>同步复位</th></tr>
+<tr><td>时钟已门控时断言复位</td><td>立即生效</td><td>延迟到时钟恢复后的第一个沿</td></tr>
+<tr><td>复位脉冲完整落在门控窗口内</td><td>正常生效</td><td><strong>永久丢失</strong></td></tr>
+<tr><td>上电（时钟未起振）</td><td>有效</td><td>无效</td></tr>
+<tr><td>同步器挂门控时钟</td><td>断言仍有效，但释放可能卡死</td><td>完全死锁</td></tr>
+<tr><td>对 ICG 使能的要求</td><td>无强制要求（但建议复位期间开门控，让下游同步逻辑也能复位）</td><td><strong>必须</strong>保证复位期间有时钟</td></tr>
+</table>
+<div class="warn">
+<p>如果设计里既有时钟门控、又用了同步复位，那么<strong>必须</strong>在架构上保证「复位有效期间时钟一定在跑」。否则同步复位就是一个不可靠的机制——它可能生效、可能延迟、也可能完全丢失，而这取决于门控的时序，在验证中极难穷举覆盖。</p>
+</div>
+<div class="part" id="P2">
+<div class="pn">第 二 部 分</div>
+<h2>set_multicycle_path 原理</h2>
+<p class="pd">从 STA 的默认检查模型出发，推导 MCP 如何移动检查沿、为什么 hold 必须配对出现、以及 <code>-start</code>/<code>-end</code> 的不对称默认值。</p>
+</div>
+<h2 id="7">7. STA 的默认检查模型</h2>
+<p>要理解 MCP，先要理解 STA 默认在检查什么。对一条 reg-to-reg 路径，工具做两件事：</p>
+<ol>
+<li>在发起时钟（launch clock）上找一个有效沿，记作 <strong>E0</strong>；</li>
+<li>在捕获时钟（capture clock）上找「E0 之后最近的那个有效沿」作为 setup 检查沿，记作 <strong>C1</strong>；hold 检查沿则取 <strong>C0</strong>（与 E0 同时刻的那个沿）。</li>
+</ol>
+<div class="diagram">            E0          E1          E2          E3
+launch clk  ─┐__________┌───────────┐__________┌───
+             ↑ 发起沿
+
+            C0          C1          C2          C3
+capture clk ─┐__________┌───────────┐__________┌───
+             ↑          ↑
+           hold 沿    setup 沿（默认）</div>
+<p>于是默认的两个不等式是：</p>
+<div class="formula">setup:  T<sub>ck2q</sub> + T<sub>dp(max)</sub> + T<sub>setup</sub> ≤ T<sub>C1</sub> − T<sub>E0</sub> = 1 × T</div>
+<div class="formula">hold:   T<sub>ck2q</sub> + T<sub>dp(min)</sub> ≥ T<sub>C0</sub> − T<sub>E0</sub> + T<sub>hold</sub> = 0 + T<sub>hold</sub></div>
+<p>这就是「数据必须在一个周期内到达，且不能快到冲掉上一个周期的数据」的含义。</p>
+<h2 id="8">8. MCP 原理：移动检查沿</h2>
+<p><code>set_multicycle_path</code> 做的事情<strong>只有一件</strong>：改变工具挑选检查沿的规则。它不改延迟、不改时钟定义、不碰任何物理量。</p>
+<div class="note">
+<p><strong>一句话本质</strong>：MCP 是一个<strong>设计断言</strong>——你在告诉工具「这条路径上的数据，功能上允许用 N 个周期传输」。工具相信你，于是把 setup 检查沿往后挪 N−1 个周期。<strong>这个断言的正确性由设计保证，工具不验证。</strong></p>
+</div>
+<h3 id="8-1">8.1 setup 方向</h3>
+<pre><code>set_multicycle_path 3 -setup -from FF_A -to FF_B</code></pre>
+<div class="diagram">默认（N=1）：
+            E0
+launch      ─┐__________┌───────────┐__________┌───
+             ↑
+capture     ─┐__________┌───────────┐__________┌───
+             C0         C1 ← setup 检查沿
+                        ←── 1×T 预算 ──→
+
+MCP N=3：
+            E0
+launch      ─┐__________┌───────────┐__________┌───
+             ↑
+capture     ─┐__________┌───────────┐__________┌───
+             C0         C1          C2          C3
+                                                ↑ setup 检查沿
+             ←────────── 3×T 预算 ──────────────→</div>
+<p>公式变成：</p>
+<div class="formula">setup:  T<sub>ck2q</sub> + T<sub>dp(max)</sub> + T<sub>setup</sub> ≤ N × T</div>
+<p>注意 <code>-setup N</code> 中的 N 是「<strong>第几个</strong>捕获沿」，不是「放宽了几个周期」。<code>-setup 1</code> 就是默认行为，等于没约束；<code>-setup 2</code> 才是放宽一个周期。</p>
+<h2 id="9">9. 为什么 hold 必须配对</h2>
+<h3 id="9-1">9.1 工具的内部公式</h3>
+<p>这是整个 MCP 机制最关键、也最容易被误解的一点。工具并不是独立地处理 setup 和 hold，而是用下面这个公式<strong>从 setup 沿推出 hold 沿</strong>：</p>
+<div class="formula">hold_edge = setup_edge − 1 − hold_mcp_value</div>
+<p>其中 <code>hold_mcp_value</code> 默认为 0。代入默认情况 <code>setup_edge = 1</code>：</p>
+<div class="formula">hold_edge = 1 − 1 − 0 = 0  ✓ 正是默认的 C0</div>
+<h3 id="9-2">9.2 只写 setup 会发生什么</h3>
+<p>如果只写 <code>set_multicycle_path 3 -setup</code>，没写 hold：</p>
+<div class="formula">hold_edge = 3 − 1 − 0 = 2</div>
+<div class="diagram">只写 -setup 3，未写 -hold：
+
+            E0
+launch      ─┐__________┌───────────┐__________┌───
+             ↑ 发起
+capture     ─┐__________┌───────────┐__________┌───
+             C0         C1          C2          C3
+                                    ↑           ↑
+                              hold 检查沿   setup 检查沿
+                                  （跑到 E0 之后 2 个周期了！）
+
+            ←─ hold 要求数据在这 2×T 内都不许变 ─→
+
+→ hold 约束变成：T_dp(min) ≥ 2×T + T_hold
+→ 工具必须插入约 2 个周期的延迟单元才能满足
+→ 面积爆炸 / 根本无法收敛</div>
+<div class="bad">
+<p><strong>后果</strong>：hold 检查沿跑到了发起沿<strong>之后</strong>两个周期。工具会认为「数据发出后必须保持 2 个周期以上不变」，于是疯狂往数据路径里插 buffer。要么面积/功耗爆炸，要么 hold 永远收敛不了。</p>
+<p>这是只写 setup 不写 hold 时最典型的症状：<strong>hold violation 数量暴增，且违例量级接近一个时钟周期的整数倍</strong>。</p>
+</div>
+<h3 id="9-3">9.3 正确的配对规则</h3>
+<p>我们希望 hold 沿保持在默认位置（也就是 0），所以要求：</p>
+<div class="formula">0 = N − 1 − hold_mcp  ⟹  hold_mcp = N − 1</div>
+<div class="good">
+<p><strong>配对铁律</strong>：<code>-setup N</code> 必须配 <code>-hold (N−1)</code>。</p>
+<pre><code>set_multicycle_path 3 -setup -from FF_A -to FF_B
+set_multicycle_path 2 -hold  -from FF_A -to FF_B   # 3 - 1 = 2
+
+# 本文第三部分的两个实例：
+# -setup 9 → -hold 8
+# -setup 2 → -hold 1</code></pre>
+</div>
+<div class="diagram">配对后（-setup 3 -hold 2）：
+
+            E0
+launch      ─┐__________┌───────────┐__________┌───
+             ↑
+capture     ─┐__________┌───────────┐__________┌───
+             C0                                 C3
+             ↑                                  ↑
+      hold 沿（回到默认位置）              setup 沿
+
+hold_edge = 3 − 1 − 2 = 0  ✓
+→ setup 放宽到 3 周期，hold 保持原样
+→ 这才是我们想要的效果</div>
+<h2 id="10">10. -start / -end 基准</h2>
+<p>MCP 的周期数要乘以「谁的周期」？这由 <code>-start</code> / <code>-end</code> 决定：</p>
+<table>
+<tr><th>选项</th><th>含义</th><th>移动的是</th></tr>
+<tr><td><code>-start</code></td><td>以<strong>发起</strong>时钟周期为单位</td><td>发起沿往前移</td></tr>
+<tr><td><code>-end</code></td><td>以<strong>捕获</strong>时钟周期为单位</td><td>捕获沿往后移</td></tr>
+</table>
+<div class="warn">
+<p><strong>默认值是不对称的，这是最容易踩的坑：</strong></p>
+<ul>
+<li><code>-setup</code> 默认 <code>-end</code>（移动捕获沿）</li>
+<li><code>-hold</code> 默认 <code>-start</code>（移动发起沿）</li>
+</ul>
+<p>在同频路径上两者等价，<strong>所以单时钟域下不用关心</strong>。但在跨频路径（如 100 MHz → 400 MHz）上，乘以哪个周期结果完全不同，必须显式指定。</p>
+</div>
+<h3 id="10-1">10.1 跨频场景举例</h3>
+<p>假设 <code>clk_slow</code> = 10 ns，<code>clk_fast</code> = 2.5 ns（4 倍关系），数据从慢域发到快域。快域每 2.5 ns 就有一个沿，默认 setup 预算只有 2.5 ns，但实际上数据有 10 ns 可用。</p>
+<pre><code># 正确：用捕获时钟（快钟）的周期数来放宽
+set_multicycle_path 4 -setup -end   -from [get_clocks clk_slow] -to [get_clocks clk_fast]
+set_multicycle_path 3 -hold  -end   -from [get_clocks clk_slow] -to [get_clocks clk_fast]
+#                                    ↑ hold 也要显式写 -end，否则默认 -start 基准不一致</code></pre>
+<div class="note">
+<p>实践建议：<strong>跨频 MCP 一定把 <code>-start</code>/<code>-end</code> 写全</strong>，不要依赖默认值。写出来既能避免基准错配，也让 review 的人一眼看懂意图。</p>
+</div>
+<h2 id="11">11. 与其他 exception 的选择</h2>
+<p>当一条路径收敛不了时，有多种 exception 可选。选错会掩盖真实问题。</p>
+<table>
+<tr><th>命令</th><th>作用</th><th>适用场景</th><th>风险</th></tr>
+<tr><td><code>set_multicycle_path</code></td><td>移动检查沿，仍然检查</td><td>路径确实需要 N 个周期，且设计保证了这一点</td><td>断言错误则硅上失效</td></tr>
+<tr><td><code>set_false_path</code></td><td>完全不检查</td><td>逻辑上永不发生的路径（如互斥的 mux 选择）</td><td>路径延迟完全失控，毛刺/串扰无约束</td></tr>
+<tr><td><code>set_max_delay -datapath_only</code></td><td>只约束数据路径绝对延迟，忽略时钟关系</td><td>真正的异步 CDC 路径（已有同步器保护）</td><td>需要自己定合理的数值</td></tr>
+<tr><td><code>set_clock_groups -asynchronous</code></td><td>声明两个时钟完全无关</td><td>真正独立的时钟域（不同 PLL）</td><td>会一次性放过所有跨域路径，粒度粗</td></tr>
+</table>
+<h3 id="11-1">11.1 选择决策树</h3>
+<div class="diagram">这条路径收敛不了，怎么办？
+│
+├─ 功能上这条路径会不会真的发生？
+│  │
+│  ├─ 不会 ──→ set_false_path
+│  │          （但要能说清为什么不会，并在验证中加 assertion）
+│  │
+│  └─ 会
+│     │
+│     ├─ 两端时钟是同一个 / 有确定相位关系？
+│     │  │
+│     │  ├─ 是 ──→ 数据允许用几个周期传？
+│     │  │        │
+│     │  │        ├─ 1 个 ──→ 不能用 exception，老实优化物理实现
+│     │  │        └─ N 个 ──→ set_multicycle_path N -setup
+│     │  │                    + set_multicycle_path (N-1) -hold
+│     │  │
+│     │  └─ 否（真异步）──→ 有同步器保护吗？
+│     │                    │
+│     │                    ├─ 有 ──→ set_max_delay -datapath_only
+│     │                    │        （约束住绝对延迟，防止 skew 过大）
+│     │                    └─ 无 ──→ 这是设计 bug，先补同步器
+│
+└─ 整个时钟域都和另一个无关？──→ set_clock_groups -asynchronous</div>
+<h2 id="12">12. MCP 的本质代价</h2>
+<p><code>set_multicycle_path</code> 看起来只是一行约束，但它改变的不是工具的算法，而是<strong>对设计行为的承诺</strong>。工具不会去验证这个承诺，它只会相信你。</p>
+
+<h3>12.1 它是断言，不是优化</h3>
+<p><code>set_false_path</code> 说的是「这条路径永远不会被使用」，<code>set_multicycle_path N</code> 说的是「这条路径被使用时，接收端在第 N 拍才会去采它，前 N−1 拍的值我不在乎」。</p>
+<div class="bad">
+<p><strong>如果设计实际上每个周期都在用这条路径</strong>，而你写了 <code>-setup 3</code>：</p>
+<ul>
+<li>STA 报 clean，签核通过</li>
+<li>P&amp;R 会主动把这条路径上的单元换小、绕远路，去换面积和功耗 —— 因为工具认为你有 3 倍的时间</li>
+<li>硅片回来，该路径在第 1 拍采到的是中间态，功能随机失效，且<strong>温度/电压越好越不容易复现</strong></li>
+</ul>
+<p>这类 bug 无法通过后仿发现（后仿用的是同一份 SDC），只能靠 review SDC 发现。</p>
+</div>
+
+<h3>12.2 必须有架构机制兜底</h3>
+<p>一条 MCP 要成立，设计里必须存在某种机制，保证「接收端在 N 拍内不会去看这个值」。常见的合法兜底机制：</p>
+<ul>
+<li><strong>静默期</strong>：复位释放后、或模式切换后，有一段固定周期数内部不做任何有效操作（复位同步器的 MCP 靠这个）</li>
+<li><strong>valid / ready 握手</strong>：数据有效标志自己走的是短路径（1 cycle），数据总线走 N cycle，接收端只在 valid 拉高后的第 N 拍采数据</li>
+<li><strong>enable 节拍</strong>：接收寄存器的 EN 由一个 N 分频的节拍信号控制，物理上每 N 拍才打开一次</li>
+<li><strong>慢速配置总线</strong>：APB / 寄存器配置路径，软件写入后要等数个周期才读回</li>
+</ul>
+<div class="warn">
+<p>Review MCP 的唯一正确提问方式不是「这条约束语法对吗」，而是：</p>
+<p><strong>「凭什么允许它用 N 个周期？是哪一段 RTL 保证了接收端在前 N−1 拍不会采它？」</strong></p>
+<p>如果写约束的人答不上来，这条 MCP 就是在掩盖时序问题，应当删掉去改物理实现或改架构。</p>
+</div>
+
+<h3>12.3 它会污染周边</h3>
+<p>MCP 的作用域由 <code>-from / -through / -to</code> 决定，而这三者的匹配是「所有满足条件的路径」，不是「我心里想的那一条」。</p>
+<ul>
+<li><code>-through [get_pins X/Q]</code> 会命中<strong>这个 Q 端驱动的全部下游路径</strong>，包括你没想到的那些</li>
+<li>一旦某条真正需要单周期的路径被顺带放宽，它就彻底失去了时序保护，而且在 report 里是 clean 的</li>
+<li>综合/布局后网表变化（cloning、buffer 插入、单元改名）可能让 <code>-through</code> 的对象消失，约束静默失效 —— 这时反而是「本该放宽的没放宽」，表现为莫名其妙的 violation</li>
+</ul>
+<p>所以 MCP 的作用域应当<strong>尽可能窄</strong>：能用 <code>-to</code> 指到具体引脚，就不要用 <code>-through</code> 指到驱动端。</p>
+
+<div class="part" id="P3">
+<p class="pn">PART 3</p>
+<h2>第三部分 · 实际 SDC Review</h2>
+<p class="pd">两组来自真实项目的 set_multicycle_path 约束：复位同步器输出的 reg-to-reg 路径，以及 PWM 输出的 reg-to-pad 路径。</p>
+</div>
+
+<h2 id="13">13. 复位同步器 MCP（-setup 9）</h2>
+
+<h3>13.1 原始约束</h3>
+<pre><code>set_multicycle_path -setup 9 -from [get_clocks clk_asicclk_src_p0] \
+  -through [get_pins u_dig_top/u_asic_top/u_asic_cru/u_tdc_rst_sync/rst_ff2_reg/Q] \
+  -to [get_clocks clk_asicclk_src_p0]
+
+set_multicycle_path -hold  8 -from [get_clocks clk_asicclk_src_p0] \
+  -through [get_pins u_dig_top/u_asic_top/u_asic_cru/u_tdc_rst_sync/rst_ff2_reg/Q] \
+  -to [get_clocks clk_asicclk_src_p0]</code></pre>
+
+<h3>13.2 它在说什么</h3>
+<ul>
+<li><code>u_tdc_rst_sync/rst_ff2_reg</code> 是复位同步器的<strong>第二级 FF</strong>，它的 Q 就是同步释放后的复位信号源</li>
+<li><code>-from</code> 和 <code>-to</code> 是<strong>同一个时钟</strong> <code>clk_asicclk_src_p0</code>，所以这是一条标准的单时钟域 reg-to-reg（准确说是 reg-to-reg 的异步复位端）路径</li>
+<li>意图：给这条复位分发网络 <strong>9 个时钟周期</strong>的传播预算，把 recovery 检查从 1 cycle 放宽到 9 cycle</li>
+</ul>
+<div class="formula">setup_slack = 9×T − T<sub>ck2q</sub> − T<sub>reset_tree</sub> − T<sub>recovery</sub> − unc</div>
+<p>对应回 §4 的那个核心矛盾：当频率很高、复位树很大时，1 个周期根本放不下整棵复位树的延迟，于是用 MCP 把预算拉大 9 倍。</p>
+
+<h3>13.3 语法层面：正确</h3>
+<div class="good">
+<ul>
+<li><strong>配对正确</strong>：<code>-hold 8</code> 配 <code>-setup 9</code>，符合 §9 的 <code>N−1</code> 铁律。代入公式 <code>hold_edge = 9 − 1 − 8 = 0</code>，hold 检查回到发起沿本身，即保持默认行为，没有被意外搬到未来 —— 这是对的</li>
+<li><strong>无需 <code>-start / -end</code></strong>：发起和捕获是同一个时钟、同一个周期，两个基准等价（§10）</li>
+<li><strong>用 <code>get_clocks</code> 做 from/to</strong>：覆盖面足够，不会因为网表改名丢失</li>
+</ul>
+</div>
+
+<h3>13.4 风险一：-through 的作用域过宽</h3>
+<div class="bad">
+<p><code>-through [get_pins .../rst_ff2_reg/Q]</code> 命中的是<strong>这个 Q 端驱动的所有下游路径</strong>。而复位同步器的输出通常不只接复位树：</p>
+<ul>
+<li>接到各级 FF 的 <code>RN</code> / <code>SN</code> 端 —— 这是本意，需要放宽</li>
+<li>接到 ICG 的 <code>E</code> / <code>TE</code> 使能端（见 §6.5 的带复位 ICG 做法）—— 这条是<strong>功能路径</strong>，如果被放宽到 9 周期，门控开闭时序就失去保护</li>
+<li>接到某些模块的「同步复位」输入（作为数据端 D 的一部分，如 <code>d = rst_n ? data : 0</code>）—— 这是纯数据路径，被放宽后直接失去时序保护</li>
+<li>接到复位状态上报寄存器、调试寄存器 —— 功能路径</li>
+</ul>
+<p>这些被顺带放宽的路径在 report 里全是 clean 的，<strong>不会有任何告警</strong>。</p>
+</div>
+<p><strong>改进方向</strong>：把作用域收窄到真正需要放宽的终点。</p>
+<pre><code># 方案 A：直接指定终点为复位引脚（最精确）
+set_multicycle_path -setup 9 \
+  -from [get_clocks clk_asicclk_src_p0] \
+  -to   [get_pins u_dig_top/u_asic_top/u_tdc_core/*/RN]
+
+# 方案 B：至少把 -through 从 Q 端挪到复位网的某个明确节点
+set_multicycle_path -setup 9 \
+  -through [get_nets u_dig_top/u_asic_top/u_asic_cru/tdc_rst_n] ...</code></pre>
+<p>约束写完后，务必用 <code>report_timing</code> 逐条确认命中了什么（见 §15）。</p>
+
+<h3>13.5 风险二：同步器本身没有被保护</h3>
+<div class="warn">
+<p>这组约束只放宽了时序，但没有阻止工具去动这个同步器。实际工程中必须配套：</p>
+<pre><code>set_dont_touch [get_cells u_dig_top/u_asic_top/u_asic_cru/u_tdc_rst_sync/rst_ff*_reg]
+# 或者允许改尺寸但不允许改结构
+set_size_only  [get_cells .../u_tdc_rst_sync/rst_ff*_reg]</code></pre>
+<p>否则综合可能因为负载过大而<strong>克隆（clone）</strong> <code>rst_ff2_reg</code>，产生 <code>rst_ff2_reg_1</code>、<code>rst_ff2_reg_2</code>…… 这时：</p>
+<ul>
+<li>MCP 的 <code>-through</code> 只匹配原名，<strong>克隆出来的新实例完全没有被放宽</strong>，但它们也驱动复位树 → 冒出一堆无法收敛的 recovery violation，且根因极难定位</li>
+<li>更糟的是多个克隆实例之间产生了新的 skew，复位释放不再是同一拍</li>
+</ul>
+</div>
+
+<h3>13.6 风险三：9 个周期必须有静默期兜底</h3>
+<p>按 §12.2，这条 MCP 成立的前提是：<strong>复位释放后的 9 个周期内，整个 TDC 模块不做任何有效操作</strong>。需要确认：</p>
+<ul>
+<li>RTL 里是否有一个释放后的等待计数器 / 状态机停留在 IDLE</li>
+<li>如果复位释放后第 1 拍就有 FF 开始计数、开始采样 —— 此时有的 FF 已经释放、有的还在复位，<strong>模块进入非法状态</strong></li>
+<li>这种失效在 RTL 仿真（零延迟）里永远看不到，只会在硅上偶发</li>
+</ul>
+<div class="note">
+<p><strong>结论</strong>：这组约束语法无误、意图合理，是高频设计中放宽 recovery 的常规手段。但必须补三件事：①把 <code>-through</code> 收窄到复位引脚；②给同步器加 <code>dont_touch</code>；③确认 RTL 有 ≥9 周期的释放静默期。</p>
+</div>
+
+<h2 id="14">14. reg-to-pad MCP（IO_PWM*）</h2>
+
+<h3>14.1 原始约束</h3>
+<pre><code>set_multicycle_path -setup 2 -from [get_clocks VCLK_VBD] \
+  -through [get_ports IO_PWM*] -to [get_clocks CLK_VBD]
+
+set_multicycle_path -hold  1 -from [get_clocks VCLK_VBD] \
+  -through [get_ports IO_PWM*] -to [get_clocks CLK_VBD]</code></pre>
+
+<h3>14.2 先认清这是哪一类路径</h3>
+<div class="warn">
+<p><strong>这是 reg-to-pad（输出）路径，不是 reg-to-reg，也不是输入路径。</strong></p>
+<p>看 <code>-through [get_ports IO_PWM*]</code> 就能确定：路径穿过的是<strong>顶层 port</strong>，而 <code>IO_PWM*</code> 显然是对外输出 PWM 波形的管脚。所以路径形态是：</p>
+</div>
+<div class="diagram">            芯片内部                          │        片外
+                                              │
+  ┌──────────┐                                │
+  │ PWM reg  │                                │
+  │        Q ├──逻辑──→ 输出 buf ──→ ◻ IO_PWM ─┼──→ 板上接收器 / 驱动器
+  │ CK       │                                │      （用虚拟时钟 CLK_VBD 建模）
+  └────▲─────┘                                │
+       │                                      │
+   VCLK_VBD  ← 内部真实时钟（launch）          │   CLK_VBD ← 虚拟时钟（capture）
+</div>
+<ul>
+<li><code>VCLK_VBD</code>：<strong>内部真实的发起时钟</strong>，就是 PWM 寄存器 CK 端上的那个时钟 —— 路径的 launch clock</li>
+<li><code>CLK_VBD</code>：<strong>虚拟时钟（virtual clock）</strong>，它不驱动芯片内任何寄存器，只是由 <code>set_output_delay -clock CLK_VBD</code> 引用，用来描述「片外那个接收器是按什么时钟去采我的 PWM 输出的」 —— 路径的 capture clock</li>
+<li><code>IO_PWM*</code>：路径的<strong>终点（endpoint）</strong>。它出现在 <code>-through</code> 里只是写法上的习惯，语义上它不是中间节点</li>
+</ul>
+<p>配套的约束一定长这样（不写 output_delay，这条 MCP 就没有意义）：</p>
+<pre><code>create_clock -name CLK_VBD -period 100 [get_ports ...]   ;# 或 create_clock 无 source = virtual
+set_output_delay 85 -clock CLK_VBD [get_ports IO_PWM*] -max
+set_output_delay -5 -clock CLK_VBD [get_ports IO_PWM*] -min</code></pre>
+
+<h3>14.3 MCP 在输出路径上的真实效果</h3>
+<p>输出路径的 setup 检查式是：</p>
+<div class="formula">T<sub>ck2q</sub> + T<sub>内部逻辑+buf+pad</sub> + output_delay<sub>max</sub> ≤ N × T</div>
+<p>默认 <code>N = 1</code>。写了 <code>-setup 2</code> 之后，右边变成 <code>2T</code>，等价于：</p>
+<div class="formula">output_delay<sub>new</sub> = output_delay − (N−1) × T</div>
+<p>也就是说，<strong>声称片外那个接收器不是在下一个沿采，而是再往后一个沿才采</strong>，于是内部多出整整一个周期 <code>T</code> 的输出时序预算。</p>
+<p><code>-hold 1</code> 的作用同 §9：代回 <code>hold_edge = setup_edge − 1 − hold_mcp = 2 − 1 − 1 = 0</code>，hold 检查停在原来的位置，<strong>没有被 setup 的放宽顺带拖到未来</strong>。配对正确。</p>
+
+<h3>14.4 这条约束合不合理：取决于片外是什么</h3>
+<div class="note">
+<p>MCP 在这里本质上是在修正「片外时序模型」。合理的情形：</p>
+<ul>
+<li>PWM 的周期远大于 <code>VCLK_VBD</code> 的周期（典型：PWM 载波几十 kHz ~ 几 MHz，内部时钟几十 ~ 几百 MHz），片外功率器件对单个内部周期的延迟完全不敏感</li>
+<li>板上接收这个 PWM 的是门驱动芯片 / 模拟比较器，根本没有「时钟采样」这回事，<code>CLK_VBD</code> 只是为了让 STA 有个参照而虚构出来的</li>
+<li>原来的 <code>output_delay</code> 是按最保守值填的，发现收不了，用 MCP 整体让一个周期</li>
+</ul>
+<p>在这类场景下，这条约束是常规做法，不必大惊小怪。</p>
+</div>
+
+<h3>14.5 风险一：MCP 管不到 bit 之间的相对关系</h3>
+<div class="bad">
+<p><code>IO_PWM*</code> 是一组管脚（通常是 PWM 的上桥 / 下桥、多相输出）。MCP 放宽的是<strong>每一条路径各自相对于时钟沿的裕量</strong>，它对「这几条路径之间的相对延迟差」毫无约束。</p>
+<p>后果：工具拿到一个周期的额外裕量后，会毫不犹豫地把这些路径上的 buffer 换小、绕远路去省面积功耗。各 bit 的延迟差（skew）可能从几十 ps 扩大到<strong>几百 ps 甚至上 ns</strong>。</p>
+<p>对 PWM 来说这是致命的：</p>
+<ul>
+<li><strong>死区时间（dead-time）被压缩</strong>：上桥关断和下桥开通之间的间隔由 RTL 算好，但如果上桥路径比下桥路径慢了 1 ns，实际死区就少了 1 ns</li>
+<li>死区压到 0 以下 → 上下桥同时导通 → <strong>shoot-through，直接炸管</strong></li>
+<li>多相 PWM 之间的相位关系被破坏，影响电流均衡</li>
+</ul>
+</div>
+<p><strong>必须配套的约束</strong>：</p>
+<pre><code># 1. 限制输出路径的绝对延迟上下限，不让工具随意拉长
+set_max_delay &lt;x&gt; -to [get_ports IO_PWM*]
+set_min_delay &lt;y&gt; -to [get_ports IO_PWM*]
+
+# 2. 或者用 output_delay 的 min/max 窗口把 skew 夹住，
+#    并对这组 port 做 skew group / 等长布线
+# 3. 更稳的做法：把死区留足余量，不依赖 ps 级精度；
+#    或在 pad 前加一级同一个 clock 上的重定时 FF，让 skew 只取决于 clock tree</code></pre>
+
+<h3>14.6 风险二：IO_ 前缀 —— 可能是双向口</h3>
+<div class="warn">
+<p>端口名以 <code>IO_</code> 开头，很可能是 <strong>bidirectional（inout）</strong> pad。这会带来两个问题：</p>
+<ul>
+<li>双向 pad 上同时存在<strong>输出路径</strong>（reg → pad，由 <code>output_delay</code> 约束）和<strong>输入路径</strong>（pad → reg，由 <code>input_delay</code> 约束）。这条 MCP 写的是 <code>-from VCLK_VBD -to CLK_VBD</code>，只能命中输出方向；输入方向（<code>-from</code> 某个虚拟时钟 <code>-to</code> 内部时钟）<strong>完全没有被这条约束覆盖</strong></li>
+<li>如果实际上这个 pad 只做输出（只是命名习惯带了 <code>IO_</code>），那没问题；如果真的复用成输入（比如读回电平、做故障检测），那输入路径的时序是另一套，需要单独 review</li>
+</ul>
+<p>更隐蔽的失配：如果某些 PWM 端口命名不是 <code>IO_PWM*</code> 开头（比如 <code>PWM_OUT_*</code>、<code>IO_PWMH</code> 写成了 <code>IO_PWM_H</code>），<code>get_ports IO_PWM*</code> 会<strong>静默漏掉</strong>它们，这些路径依然按 1 周期检查 → 报 violation；或者 <code>get_ports</code> 一个也没匹配上，整条 MCP 变成空约束，<strong>工具连 warning 都不一定给</strong>。</p>
+</div>
+
+<h3>14.7 Review 结论</h3>
+<div class="note">
+<p>这组约束<strong>语法与配对正确</strong>（2 配 1，符合 <code>N−1</code>），路径类型是 reg-to-pad，作用是把输出时序预算从 1 个周期放宽到 2 个周期，等价于把 <code>output_delay</code> 减去一个周期。</p>
+<p>需要确认 / 补充：</p>
+<ol>
+<li>确认 <code>CLK_VBD</code> 确实是只用于 <code>set_output_delay</code> 的虚拟时钟，且周期与 <code>VCLK_VBD</code> 的关系清楚（若两者周期不同，还要考虑 §10 的 <code>-start / -end</code>）</li>
+<li>确认片外接收器真的能容忍多一个周期的延迟（PWM 载波周期 ≫ 内部时钟周期）</li>
+<li><strong>必须</strong>另加 <code>set_max_delay / set_min_delay</code> 或等长措施，守住 PWM 各 bit 之间的 skew 与死区</li>
+<li>用 <code>report_port -verbose</code> 确认端口方向，用 <code>report_exceptions -ignored</code> 确认这条 MCP 真的匹配上了路径</li>
+</ol>
+</div>
+
+<h2 id="15">15. 验证命令清单</h2>
+<p>任何 exception 写完之后都必须验证，否则它可能<strong>命中过多</strong>（掩盖真实问题）或<strong>一条都没命中</strong>（白写）。</p>
+
+<h3>15.1 确认约束有没有被忽略</h3>
+<pre><code># 列出所有被工具丢弃 / 未匹配到任何路径的 exception
+report_exceptions -ignored
+
+# 列出所有 exception 及其覆盖情况
+report_exceptions -all</code></pre>
+<p>这是第一道关：如果你的 MCP 出现在 <code>-ignored</code> 列表里，说明 <code>-from/-through/-to</code> 的对象在当前网表中不存在（改名、被优化掉、通配符没匹配上）。</p>
+
+<h3>15.2 确认检查沿真的被移动了</h3>
+<pre><code>report_timing -path_type full_clock_expanded \
+  -from [get_clocks VCLK_VBD] -to [get_clocks CLK_VBD] \
+  -delay_type max -max_paths 10</code></pre>
+<p>在报告里核对三件事：</p>
+<ul>
+<li><strong>capture clock 的时间点</strong>：是不是 <code>N × T</code>，而不是 <code>1 × T</code></li>
+<li>报告头部是否出现 <code>multicycle</code> 字样 / <code>Path Group</code> 与预期一致</li>
+<li>hold 报告（<code>-delay_type min</code>）的检查沿有没有被意外拖到未来</li>
+</ul>
+
+<h3>15.3 确认没有路径被漏检</h3>
+<pre><code># 找出所有 untested / 无约束的端点 —— 最容易藏雷的地方
+report_analysis_coverage -status_details untested
+
+# 看看某个端点到底被哪些 exception 影响
+report_timing -from ... -to ... -significant_digits 3 -nosplit</code></pre>
+<div class="warn">
+<p><code>report_analysis_coverage</code> 是签核必查项。被 MCP / false_path 误伤的路径不会报 violation，但会出现在 untested 或 覆盖率下降中。</p>
+</div>
+
+<h3>15.4 端口与复位专项</h3>
+<pre><code># 确认端口方向、是否双向、驱动能力（对应 §14.6）
+report_port -verbose [get_ports IO_PWM*]
+
+# 单独看 recovery / removal 检查（对应 §3、§13）
+report_timing -delay_type max -recovery -max_paths 20
+report_timing -delay_type min -removal  -max_paths 20
+
+# 确认同步器没有被 clone / retime（对应 §13.5）
+report_cells [get_cells -hier *rst_ff*_reg*]
+report_attribute -cell [get_cells .../u_tdc_rst_sync/rst_ff2_reg] dont_touch</code></pre>
+
+<h3>15.5 Review Checklist</h3>
+<table>
+<tr><th>检查项</th><th>命令 / 做法</th></tr>
+<tr><td>约束是否命中</td><td><code>report_exceptions -ignored</code></td></tr>
+<tr><td>setup / hold 是否配对（N 与 N−1）</td><td>人工 grep SDC，逐条配对</td></tr>
+<tr><td>检查沿是否如预期</td><td><code>report_timing -path_type full_clock_expanded</code></td></tr>
+<tr><td>作用域有没有过宽</td><td><code>report_timing</code> 列出 <code>-through</code> 命中的全部路径</td></tr>
+<tr><td>是否存在未被约束的端点</td><td><code>report_analysis_coverage -status_details untested</code></td></tr>
+<tr><td>端口方向 / 双向口</td><td><code>report_port -verbose</code></td></tr>
+<tr><td>recovery / removal 收敛</td><td><code>report_timing -recovery / -removal</code></td></tr>
+<tr><td>同步器结构完整</td><td><code>report_cells -hier *rst_ff*</code> + <code>dont_touch</code> 属性</td></tr>
+<tr><td>N 个周期有架构依据</td><td>追问 RTL owner：哪段逻辑保证了静默期 / 握手</td></tr>
+<tr><td>输出 skew / 死区</td><td>额外的 <code>set_max_delay</code> / <code>set_min_delay</code></td></tr>
+</table>
+
 <footer>本文整理自一次关于复位架构与 SDC 多周期约束的技术讨论。</footer>
 </div>
-<script>SCRIPTHERE</script>
+<script>
+(function(){
+  var nav    = document.getElementById('nav');
+  var toggle = document.getElementById('nav-toggle');
+  var links  = [].slice.call(nav.querySelectorAll('a'));
+  var targets = links.map(function(a){
+    return document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  });
+  toggle.addEventListener('click', function(){ nav.classList.toggle('open'); });
+  nav.addEventListener('click', function(e){
+    if (e.target.tagName === 'A') nav.classList.remove('open');
+  });
+  function highlight(){
+    var i, cur = 0;
+    for (i = 0; i < targets.length; i++) {
+      if (targets[i] && targets[i].getBoundingClientRect().top <= 80) cur = i;
+    }
+    if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 4)
+      cur = targets.length - 1;
+    for (i = 0; i < links.length; i++) links[i].classList.toggle('active', i === cur);
+    var act = links[cur];
+    if (act.offsetTop < nav.scrollTop ||
+        act.offsetTop + act.offsetHeight > nav.scrollTop + nav.clientHeight) {
+      nav.scrollTop = act.offsetTop - nav.clientHeight / 2;
+    }
+  }
+  var pending = false;
+  window.addEventListener('scroll', function(){
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function(){ pending = false; highlight(); });
+  });
+  window.addEventListener('resize', highlight);
+  highlight();
+})();
+</script>
 </body>
 </html>
