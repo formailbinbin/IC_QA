@@ -96,7 +96,7 @@ body.has-nav .wrap{margin-left:264px}
 <a class="lv3" href="#4-4">4.4 单 bit 选型表</a>
 <a class="lv2" href="#5">5. 多 bit 同步</a>
 <a class="lv3" href="#5-1">5.1 格雷码</a>
-<a class="lv3" href="#5-2">5.2 MUX 同步（数据冻结）</a>
+<a class="lv3" href="#5-2">5.2 MUX 同步（数据冻结 / DMUX）</a>
 <a class="lv3" href="#5-3">5.3 握手</a>
 <a class="lv3" href="#5-4">5.4 异步 FIFO</a>
 <a class="lv3" href="#5-5">5.5 多 bit 选型表</a>
@@ -600,7 +600,7 @@ endfunction</code></pre>
 <p><strong>格雷码的适用条件极其严格</strong>：源端数值必须<strong>每次只 ±1 单调递变</strong>。一旦出现跳变（如计数器被软件写入一个任意值、或清零 <code>ptr &lt;= 0</code>），就会多位同时翻转，格雷码保护完全失效。所以它基本只用在 <strong>FIFO 读写指针</strong>这一种场合。</p>
 </div>
 
-<h3 id="5-2">5.2 MUX 同步（数据冻结）—— 最常用也最省</h3>
+<h3 id="5-2">5.2 MUX 同步（数据冻结 / DMUX / MCP）—— 最常用也最省</h3>
 <p>思路：<strong>数据总线根本不过同步器</strong>，只同步一个单 bit 的「数据有效」使能。源端保证使能有效期间数据稳定，接收端用同步后的使能去打拍采数据。</p>
 <div class="diagram">   clk_src 域          │              clk_dst 域
                        │
@@ -636,6 +636,171 @@ end</code></pre>
 <div class="good">
 <p><strong>为什么安全</strong>：<code>valid</code> 经过 2 级同步，接收端看到它时，<code>data_src</code> 已经稳定了至少 2 个 <code>clk_dst</code> 周期。同步延迟本身就是数据的建立时间保证。面积开销只有 2 个 FF（而不是 2×32），这也是它被广泛使用的原因。</p>
 <p>约束上需要配合 <code>set_max_delay -datapath_only</code> 限制数据线延迟，确保它不会比 valid 路径慢太多（见 <a href="#12-2">§12.2</a>）。</p>
+</div>
+
+<h4>（1）为什么 data 可以不打拍——同步器到底在解决什么</h4>
+<p>这是初学者对 DMUX 最大的疑惑：<strong>valid 打了两拍，data 一拍没打，这合理吗？</strong>答案是合理，而且"data 不打拍"恰恰是这个方案成立的理由，不是它的漏洞。</p>
+<p>关键在于回到同步器的本质：同步器存在的唯一目的是<strong>压低亚稳态概率</strong>，而亚稳态只在「信号跳变」与「时钟沿」在同一个窗口里相撞时才会发生。因此判断一条跨域信号要不要同步器，只需问一句：<strong>它在接收端采样的那一刻，会不会在跳变？</strong></p>
+<table>
+<tr><th>跨域信号</th><th>跳变时刻</th><th>采样时是否在跳变</th><th>是否需要同步器</th></tr>
+<tr><td><code>valid</code></td><td>任意时刻、不可预知</td><td>可能</td><td><strong>需要</strong>（必须两级）</td></tr>
+<tr><td><code>data[31:0]</code></td><td>只在 <code>valid</code> 为低时跳变</td><td>不会（已冻结 ≥2 拍）</td><td><strong>不需要</strong></td></tr>
+</table>
+<div class="good">
+<p>所以 DMUX 的本质是一次<strong>问题转化</strong>：把"随机跳变的 32 bit"转化成"<strong>受控跳变的 32 bit + 随机跳变的 1 bit</strong>"，只给那 1 bit 付同步器的代价。对 data 而言，接收端采样时它是一条<strong>静态的线</strong>，与采一个常量无异——既不会亚稳态，更不会出现 32 bit 各自解析方向不同的多 bit 不一致（<a href="#2-3">§2.3</a>）。</p>
+</div>
+<p>这也解释了这个方案的另外两个常见名字：</p>
+<table>
+<tr><th>别名</th><th>由来</th></tr>
+<tr><td><strong>DMUX 同步器</strong></td><td>接收端的 load-enable 寄存器在电路上就是 <code>MUX + FF</code>（EN=0 保持、EN=1 装载），data 走 MUX 的一个输入，故称 D-MUX</td></tr>
+<tr><td><strong>MCP formulation</strong><br>（Multi-Cycle Path）</td><td>data 这条路径被<strong>允许用好几个周期</strong>走完，不要求单拍到达——这正是"多周期路径"的含义</td></tr>
+</table>
+
+<h4>（2）时序图：一次完整传输到底发生了什么</h4>
+<p>文字说"同步延迟就是建立时间余量"还比较抽象，画成波形就一目了然。下图假设 <code>clk_src</code> 稍慢、<code>clk_dst</code> 稍快，<code>T1~T9</code> 标的是 <code>clk_dst</code> 的上升沿：</p>
+<div class="diagram">                T1    T2    T3    T4    T5    T6    T7    T8    T9
+                │     │     │     │     │     │     │     │     │
+clk_dst      ───┐ ┌───┐ ┌───┐ ┌───┐ ┌───┐ ┌───┐ ┌───┐ ┌───┐ ┌───┐ ┌──
+                └─┘   └─┘   └─┘   └─┘   └─┘   └─┘   └─┘   └─┘   └─┘
+
+clk_src      ─────┐   ┌─────┐     ┌─────┐     ┌─────┐     ┌─────┐
+                  └───┘     └─────┘     └─────┘     └─────┘     └──
+
+                        ┌───────────────────────────────────┐
+valid_src    ───────────┘           (源域抬高，保持直到收到 ack)
+                        ↑ ①
+                  ┌─────────────────────────────────────────────────
+data_src[31:0]  ══╪══ 旧值 D0 ══╳══════════ 新值 D1（冻结区）═══════
+                  ↑ ⓞ 数据先变                   ↑↑↑ 这段期间严禁改动
+
+                              ┌───────────────────────────────────
+valid_s1     ─────────────────┘   (第 1 级同步器，可能亚稳态 ~~)
+                              ↑ ② 此沿可能采到亚稳态，但只接第 2 级 D
+
+                                    ┌─────────────────────────────
+valid_dst    ───────────────────────┘   (第 2 级，已稳定干净)
+                                    ↑ ③
+
+valid_dst_d  ─────────────────────────────┐ ┌───────────────────────
+                                          └─┘ (再打一拍，用于边沿检测)
+
+load_en      ───────────────────────────────┐ ┌─────────────────────
+               (= valid_dst &amp; ~valid_dst_d) └─┘
+                                            ↑ ④ 单周期脉冲
+
+                                              ┌─────────────────────
+data_dst[31:0] ══ 旧值 ════════════════════╳══ D1 ═════════════════
+                                            ↑ ⑤ 此刻 data_src 已稳定 ≥3 拍
+
+              ├────── 数据稳定期（安全余量）─────┤
+              ⓞ                                ⑤
+              └─ data 从这里就不动了，到这里才被采 ─┘</div>
+<table>
+<tr><th>标号</th><th>时刻</th><th>发生的事</th><th>关键点</th></tr>
+<tr><td>ⓞ</td><td>T2 前</td><td>源域先把 <code>data_src</code> 换成 D1</td><td><strong>必须先于 valid</strong>，这是条件 1</td></tr>
+<tr><td>①</td><td>T2 后</td><td>源域抬高 <code>valid_src</code></td><td>此后 data 进入<strong>冻结区</strong></td></tr>
+<tr><td>②</td><td>T4</td><td>第 1 级同步器采 <code>valid_src</code>，<strong>可能亚稳态</strong></td><td>它的 Q 只接第 2 级 D，有整个周期去解析</td></tr>
+<tr><td>③</td><td>T5</td><td>第 2 级输出 <code>valid_dst</code>，干净</td><td>到此 data 已稳定约 3 个 <code>clk_dst</code> 周期</td></tr>
+<tr><td>④</td><td>T6</td><td>边沿检测产生单周期 <code>load_en</code></td><td>保证只装载一次，不会重复采</td></tr>
+<tr><td>⑤</td><td>T6</td><td><code>data_dst</code> 装载 D1</td><td><strong>采样点距数据变化已隔 4 拍</strong>，远超 setup 要求</td></tr>
+</table>
+<div class="good">
+<p>看波形就能理解这句话的含义：<strong>ⓞ 到 ⑤ 之间的那段距离，就是安全余量</strong>。它不是靠给 data 加同步器"挡"出来的，而是靠 valid 走同步器所<strong>自然消耗掉的时间</strong>换来的——这正是 DMUX 一分面积不花就拿到余量的精髓。注意 ② 处的亚稳态是<strong>允许发生</strong>的，它只会让 <code>valid_dst</code> 的到达时刻在 T5 / T6 之间抖动一拍，而 data 早就冻结，抖哪一拍采到的都是 D1。</p>
+</div>
+
+<h4>（3）违反条件 3 时的时序图：最典型的 DMUX bug</h4>
+<p>前面说"源端必须等 ack 才能改 data"是最常踩的坑，画出来就知道为什么。下图是源端<strong>只把 valid 拉高一拍就撤销并立刻改数据</strong>的情形：</p>
+<div class="diagram">                T1    T2    T3    T4    T5    T6    T7
+                │     │     │     │     │     │     │
+clk_dst      ───┐ ┌───┐ ┌───┐ ┌───┐ ┌───┐ ┌───┐ ┌───┐ ┌──
+                └─┘   └─┘   └─┘   └─┘   └─┘   └─┘   └─┘
+
+valid_src    ───────┌─────┐
+                    │     │  ← 只保持 1 个 clk_src 周期就撤了
+             ───────┘     └───────────────────────────────
+
+data_src     ══ D0 ═╳═ D1 ══╳══ D2 ═══╳══ D3 ═══════════════
+                    ↑        ↑         ↑
+                    抬 valid  撤了就改  又改   ← 源端完全没等确认
+
+valid_dst    ─────────────────────┐ ┌───────────────────────
+                                  └─┘  ← 同步后才出现（已晚 2~3 拍）
+                                   ↑
+data_dst     ══ 旧值 ══════════════╳══ ??? ═════════════════
+                                   ↑
+                        此刻 data_src 已经是 D2 或 D3 了！
+                        采到的既不是 D1，甚至可能是跳变中的混合值</div>
+<div class="bad">
+<p><strong>两重错误叠加</strong>：</p>
+<ul>
+<li><strong>数据错</strong>：接收端在 T5 采样时，源端早已把 data 改成 D2/D3，<code>valid=D1</code> 这个配对关系被破坏——<strong>采到的值和当初那个 valid 不是一对</strong>。</li>
+<li><strong>可能采到混合值</strong>：更糟的是，若采样沿正好撞在 D2→D3 的跳变上，32 bit 各自解析，会得到一个<strong>从未存在过的数值</strong>（这就退化成了 <a href="#2-3">§2.3</a> 的多 bit 不一致）。</li>
+</ul>
+<p>而且 <code>valid_src</code> 只有 1 个 <code>clk_src</code> 周期宽，若 <code>clk_dst</code> 更慢还会<strong>整个脉冲被漏采</strong>（<a href="#2-2">§2.2</a>），这笔传输直接消失。</p>
+</div>
+<div class="good">
+<p><strong>正确做法</strong>（对应 <a href="#5-3">§5.3</a> 的握手）：<code>valid_src</code> 必须<strong>一直保持</strong>，直到接收端的 <code>ack</code> 同步回源域被确认之后，才允许撤销 valid 并改动数据。波形上就是把上图的 <code>valid_src</code> 拉长到跨过 ack 返回点，<strong>冻结区必须完整覆盖采样点</strong>。</p>
+</div>
+
+<h4>（4）它成立依赖的 5 个条件——少一条就出错</h4>
+<p>必须强调：DMUX <strong>并非天生安全</strong>，它的安全性不来自电路本身，而来自下面 5 条纪律把风险挪到了源端。少守一条，方案立刻失效：</p>
+<table>
+<tr><th>#</th><th>必须满足的条件</th><th>违反后果</th></tr>
+<tr><td>1</td><td><strong>data 必须先于 valid 稳定</strong>（源域至少提前 1 拍）</td><td>接收端采到新旧混合值</td></tr>
+<tr><td>2</td><td><strong>valid 有效期间源端不得改 data</strong></td><td>直接采错</td></tr>
+<tr><td>3</td><td><strong>源端必须等 ack（或等够拍数）才能改 data</strong></td><td><strong>最常见的 bug</strong>：源端 <code>valid</code> 一撤就改数据，但接收端还没采到</td></tr>
+<tr><td>4</td><td><strong>data 路径延迟必须受约束</strong>（<code>set_max_delay -datapath_only</code>）</td><td>见下文（5），这条最容易被漏</td></tr>
+<tr><td>5</td><td><strong>接收端只能有一份 <code>valid_dst</code></strong>，不许两处各自同步</td><td>重汇聚，EN 分裂导致只有部分 bit 被装载</td></tr>
+</table>
+<div class="warn">
+<p>条件 <strong>3</strong> 和 <strong>4</strong> 是实际项目中踩坑最多的两条。条件 3 的本质是：<code>valid_src</code> 撤销 ≠ 接收端已采样，中间还隔着 2 级同步延迟。只要源端不等确认就改数据，就是在和同步器赛跑。这也正是 <a href="#5-3">§5.3</a> 要引入 <code>ack</code> 闭环的原因。</p>
+</div>
+
+<h4>（5）最容易被漏的一条：data 路径必须打 set_max_delay</h4>
+<p>很多人认为 data 既然不打拍，直接 <code>set_false_path</code> 放掉就完事了。<strong>这是错的。</strong></p>
+<p>先理清安全余量的来源：<code>valid</code> 走了 2 级同步器 ⇒ 接收端的采样动作发生在 <code>valid_src</code> 抬起之后约 2~3 个 <code>clk_dst</code> 周期。<strong>只要 data 能在这段时间内到达，它就一定是稳定的。</strong>换句话说，这个方案隐含了一个时序假设：「data 路径延迟 &lt; valid 的同步延迟」。</p>
+<p>而 <code>set_false_path</code> 把路径<strong>完全</strong>排除在时序分析之外，综合与布线工具就有充分理由把这 32 bit 绕成超长线去换取别处的面积/时序收益——假设就被打破了：</p>
+<pre><code># ---- 错：工具可以把 32 bit 数据线布成任意长，可能比 valid 路径晚几个周期到 ----
+set_false_path -from [get_clocks clk_src] -to [get_clocks clk_dst]
+
+# ---- 对：排除时钟关系，但仍然限制数据线的绝对延迟 ----
+set_clock_groups -asynchronous -group {clk_src} -group {clk_dst}
+
+set_max_delay 4.0 -datapath_only \
+    -from [get_cells u_src/data_src_reg*] \
+    -to   [get_cells u_dst/data_dst_reg*]</code></pre>
+<table>
+<tr><th>要点</th><th>说明</th></tr>
+<tr><td><strong>延迟值怎么取</strong></td><td>经验值取 <code>min(T_src, T_dst)</code> 到 1 个 <code>clk_dst</code> 周期。保守但省事，且几乎不会给布线造成压力</td></tr>
+<tr><td><strong>为什么必须 <code>-datapath_only</code></strong></td><td>让工具<strong>只看数据路径延迟，不计入时钟偏斜</strong>。异步时钟之间的 skew 本身无意义且无法收敛，不加这个选项约束根本签不下来</td></tr>
+<tr><td><strong>隐性风险：bit 间 skew</strong></td><td>单看每 bit 都在余量内，但若 bit0 与 bit31 相差 2 个周期以上，<strong>同样会采到混合值</strong>。<code>set_max_delay</code> 给出的上界同时也就限制了 bit 间 skew 的上界——这是它的第二重作用</td></tr>
+</table>
+
+<h4>（6）CDC 工具视角：必须声明 qualifier</h4>
+<p>静态 CDC 工具默认会把 <code>data_src → data_dst</code> 报成「<strong>未同步的多 bit crossing</strong>」（高危）。正确做法<strong>不是 waive 掉</strong>，而是告诉工具这条路径受一个使能信号保护：</p>
+<pre><code># ---- SGDC：声明 valid_dst 是 data_dst 的 qualifier（使能保护信号）----
+qualifier -name u_dst/valid_dst -crossing {u_dst/data_dst[*]}</code></pre>
+<p>声明之后，工具会反过来帮你检查前面的条件 1/2/3——例如验证 <code>data_src</code> 在 <code>valid</code> 窗口内是否真的没有变化。</p>
+<div class="warn">
+<p>但要清楚：<strong>这只是结构检查</strong>。<code>qualifier</code> 是你对工具做出的一个<strong>承诺</strong>，工具的结构分析能力有限，无法覆盖所有动态行为。因此 <a href="#13-2">§13.2</a> 的原则在这里同样适用：<strong>每一条 <code>qualifier</code> 声明，都必须配一条 SVA 在仿真中兜住它</strong>。</p>
+</div>
+<pre><code>// ---- data 在 valid 有效期间必须冻结（对应条件 2）----
+property p_data_frozen;
+    @(posedge clk_src) disable iff (!rst_src_n)
+        valid_src |-> $stable(data_src);
+endproperty
+assert property (p_data_frozen);</code></pre>
+
+<h4>（7）什么时候不该用 DMUX</h4>
+<table>
+<tr><th>场景</th><th>原因</th><th>改用</th></tr>
+<tr><td>连续数据流，每拍都有新数据</td><td>DMUX 每笔要 4~6 拍，吞吐太低</td><td>异步 FIFO（<a href="#5-4">§5.4</a>）</td></tr>
+<tr><td>源端无法等 ack（没有反压通路）</td><td>条件 3 无法满足</td><td>异步 FIFO</td></tr>
+<tr><td>数据是递增计数器，且需要连续可见</td><td>不存在"冻结"窗口</td><td>格雷码（<a href="#5-1">§5.1</a>）</td></tr>
+<tr><td>两端频率比极端（如 1:100）</td><td><code>valid</code> 脉冲宽度难保证，慢域会漏采</td><td>握手（<a href="#5-3">§5.3</a>）或 FIFO</td></tr>
+</table>
+<div class="note">
+<p><strong>一句话总结</strong>：valid 打拍、data 不打拍，是用「<strong>源端的时序纪律</strong>」换「<strong>接收端的面积</strong>」。方案本身没有问题，问题永远出在那 5 条纪律有没有真的守住——尤其是<strong>「源端必须等 ack 才能改数据」</strong>和<strong>「data 路径必须打 <code>set_max_delay</code>」</strong>这两条。</p>
 </div>
 
 <h3 id="5-3">5.3 握手：MUX 同步 + 闭环确认</h3>
