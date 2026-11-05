@@ -101,11 +101,22 @@ body.has-nav .wrap{margin-left:264px}
 <a class="lv2" href="#13">13. 复位同步器 MCP（-setup 9）</a>
 <a class="lv2" href="#14">14. reg-to-pad MCP（IO_PWM*）</a>
 <a class="lv2" href="#15">15. 验证命令清单</a>
+<a class="lv1" href="#P4">第四部分 · 常见 SDC 速查</a>
+<a class="lv2" href="#16">16. 常见 SDC 约束清单</a>
+<a class="lv3" href="#16-1">16.1 SDC 标准骨架</a>
+<a class="lv3" href="#16-2">16.2 时钟定义类</a>
+<a class="lv3" href="#16-3">16.3 时钟关系类</a>
+<a class="lv3" href="#16-4">16.4 I/O 时序类</a>
+<a class="lv3" href="#16-5">16.5 时序例外类</a>
+<a class="lv3" href="#16-6">16.6 设计规则与环境</a>
+<a class="lv3" href="#16-7">16.7 优化保护类</a>
+<a class="lv3" href="#16-8">16.8 常用查询命令</a>
+<a class="lv3" href="#16-9">16.9 高频易错点汇总</a>
 </nav>
 <div class="wrap">
 <header>
 <h1>复位架构与多周期约束</h1>
-<p class="sub">断言 × 撤离两个维度 · 同步撤离（高频/低频）与异步撤离 · 时序收敛 · 时钟门控交互 · set_multicycle_path 原理与实战 Review</p>
+<p class="sub">断言 × 撤离两个维度 · 同步撤离（高频/低频）与异步撤离 · 时序收敛 · 时钟门控交互 · set_multicycle_path 原理与实战 Review · 常见 SDC 约束速查</p>
 </header>
 <div class="part" id="P1">
 <div class="pn">第 一 部 分</div>
@@ -165,6 +176,15 @@ body.has-nav .wrap{margin-left:264px}
         <li><a class="n" href="#1-5">极性 · 作用范围 · 撤离顺序</a></li>
         <li><a class="n risk" href="#2-3">RDC 跨复位域</a></li>
         <li><a class="n risk" href="#6">时钟门控交互<span class="tag">复位丢失 / 死锁</span></a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#16">SDC 约束<span class="tag">如何写进约束文件</span></a>
+      <ul>
+        <li><a class="n" href="#16-1">SDC 骨架与优先级<span class="tag">时钟 → I/O → 例外 → DRC</span></a></li>
+        <li><a class="n" href="#8">set_multicycle_path<span class="tag">移动检查沿</span></a></li>
+        <li><a class="n" href="#16-3">时钟关系<span class="tag">clock_groups / false_path</span></a></li>
+        <li><a class="n" href="#16-7">同步器保护<span class="tag">size_only / dont_touch</span></a></li>
+        <li><a class="n risk" href="#16-9">高频易错点<span class="tag">10 条</span></a></li>
       </ul>
     </li>
   </ul>
@@ -1465,6 +1485,234 @@ report_attribute -cell [get_cells .../u_tdc_rst_sync/rst_ff2_reg] dont_touch</co
 <tr><td>同步器结构完整</td><td><code>report_cells -hier *rst_ff*</code> + <code>dont_touch</code> 属性</td></tr>
 <tr><td>N 个周期有架构依据</td><td>追问 RTL owner：哪段逻辑保证了静默期 / 握手</td></tr>
 <tr><td>输出 skew / 死区</td><td>额外的 <code>set_max_delay</code> / <code>set_min_delay</code></td></tr>
+</table>
+
+<div class="part" id="P4">
+<div class="pn">第 四 部 分</div>
+<h2>常见 SDC 约束速查</h2>
+<p class="pd">按「时钟 → I/O → 例外 → 环境 → 面积/DRC」的顺序，梳理一份 SDC 从头到尾会用到的命令、推荐写法与典型坑。本部分是前三部分的横向索引。</p>
+</div>
+
+<h2 id="16">16. 常见 SDC 约束清单</h2>
+<p>SDC（Synopsys Design Constraints）是 Tcl 语法的时序约束文件。一份完整 SDC 的书写顺序是有讲究的 —— <strong>后面的命令依赖前面建立的对象</strong>，顺序错了会出现「对象不存在」或「约束被覆盖」。</p>
+
+<h3 id="16-1">16.1 一份 SDC 的标准骨架</h3>
+<div class="diagram">┌─────────────────────────────────────────────────────────┐
+│ 0. 单位与环境       set_units / set_operating_conditions│
+├─────────────────────────────────────────────────────────┤
+│ 1. 时钟定义         create_clock                        │  ← 地基
+│                     create_generated_clock              │
+│                     set_clock_uncertainty / -latency    │
+│                     set_clock_transition                │
+├─────────────────────────────────────────────────────────┤
+│ 2. 时钟关系         set_clock_groups -asynchronous      │  ← 先说清谁和谁
+│                     set_false_path（跨异步域）          │     不需要定时
+├─────────────────────────────────────────────────────────┤
+│ 3. I/O 时序         set_input_delay / set_output_delay  │
+│                     set_driving_cell / set_load         │
+├─────────────────────────────────────────────────────────┤
+│ 4. 时序例外         set_multicycle_path                 │  ← 必须放在
+│                     set_max_delay / set_min_delay       │     时钟之后
+│                     set_false_path（功能性）            │
+│                     set_case_analysis                   │
+├─────────────────────────────────────────────────────────┤
+│ 5. 设计规则         set_max_transition / set_max_fanout │
+│                     set_max_capacitance                 │
+├─────────────────────────────────────────────────────────┤
+│ 6. 优化与保护       set_dont_touch / set_size_only      │
+│                     set_ideal_network                   │
+└─────────────────────────────────────────────────────────┘</div>
+<div class="warn">
+<p><strong>优先级规则</strong>（同一条路径被多条例外命中时，由强到弱）：</p>
+<p><code>set_false_path</code> &gt; <code>set_max_delay</code> / <code>set_min_delay</code> &gt; <code>set_multicycle_path</code> &gt; 默认单周期检查</p>
+<p>同一级别内，<strong>作用域越具体优先级越高</strong>：<code>-from A -to B</code> 胜过 <code>-from A</code>，<code>-from A</code> 胜过 <code>-to B</code>（因为 <code>-from</code> 比 <code>-to</code> 优先）。两条同样具体的命令，<strong>后写的覆盖先写的</strong>。</p>
+</div>
+
+<h3 id="16-2">16.2 时钟定义类</h3>
+<table>
+<tr><th>命令</th><th>作用</th><th>典型写法</th></tr>
+<tr><td><code>create_clock</code></td><td>定义主时钟，一切时序的起点</td><td><code>create_clock -name clk -period 10 [get_ports clk]</code></td></tr>
+<tr><td><code>create_generated_clock</code></td><td>定义分频/倍频/门控后的派生时钟，自动继承源时钟延迟</td><td><code>create_generated_clock -name clk_d2 -source [get_ports clk] -divide_by 2 [get_pins div/Q]</code></td></tr>
+<tr><td><code>create_clock</code>（虚拟）</td><td>不挂到任何 pin，只作 I/O 时序参考（见 <a href="#14">§14</a>）</td><td><code>create_clock -name vclk -period 10</code>（无对象列表）</td></tr>
+<tr><td><code>set_clock_uncertainty</code></td><td>预留 jitter + skew 余量</td><td><code>set_clock_uncertainty -setup 0.15 [get_clocks clk]</code></td></tr>
+<tr><td><code>set_clock_latency</code></td><td>综合阶段估算时钟树延迟（CTS 后用 <code>-source</code> 保留片外部分）</td><td><code>set_clock_latency 0.5 [get_clocks clk]</code></td></tr>
+<tr><td><code>set_clock_transition</code></td><td>综合阶段假定时钟沿的转换时间</td><td><code>set_clock_transition 0.1 [get_clocks clk]</code></td></tr>
+<tr><td><code>set_propagated_clock</code></td><td>CTS 之后改用真实时钟树延迟</td><td><code>set_propagated_clock [all_clocks]</code></td></tr>
+</table>
+<pre><code># 典型时钟段：主时钟 + 分频时钟 + 不确定性
+create_clock -name clk_core -period 1.000 [get_ports clk_core]
+create_clock -name clk_slow -period 100.0 [get_ports clk_slow]
+
+# 2 分频
+create_generated_clock -name clk_core_d2 \
+    -source [get_ports clk_core] -divide_by 2 \
+    [get_pins u_div/clk_out_reg/Q]
+
+# 综合阶段：理想时钟树 + 预留余量
+set_clock_latency    0.3 [all_clocks]
+set_clock_transition 0.05 [all_clocks]
+set_clock_uncertainty -setup 0.08 [all_clocks]
+set_clock_uncertainty -hold  0.03 [all_clocks]
+
+# CTS 之后切换（通常在 PnR 脚本里，而非 SDC）
+# set_propagated_clock [all_clocks]</code></pre>
+<div class="note">
+<p><strong>门控时钟是否要 <code>create_generated_clock</code>？</strong>标准 ICG 单元（<a href="#6">§6</a> 的 <code>CKLNQD4</code>）的输出<strong>不需要</strong>单独定义 —— 工具会自动让源时钟穿过 ICG 传播，并自动做时钟门控检查（clock gating check）。只有<strong>分频、倍频、反相、多路选择</strong>后的时钟才需要显式定义。</p>
+</div>
+
+<h3 id="16-3">16.3 时钟关系类</h3>
+<p>这是最容易写错、且后果最严重的一类。三个命令语义完全不同：</p>
+<table>
+<tr><th>命令</th><th>语义</th><th>作用范围</th></tr>
+<tr><td><code>set_clock_groups -asynchronous</code></td><td>两组时钟之间<strong>没有固定相位关系</strong>，双向所有路径都不定时</td><td>双向、全部路径</td></tr>
+<tr><td><code>set_clock_groups -physically_exclusive</code></td><td>两个时钟<strong>物理上不会同时存在</strong>（如 mux 选择的两个时钟源），crosstalk 也不分析</td><td>双向、全部路径</td></tr>
+<tr><td><code>set_clock_groups -logically_exclusive</code></td><td>逻辑上互斥但<strong>物理上共存</strong>（仍需做信号完整性/crosstalk 分析）</td><td>双向、全部路径</td></tr>
+<tr><td><code>set_false_path -from A -to B</code></td><td>单向、指定路径不定时</td><td>单向、可精确限定</td></tr>
+</table>
+<pre><code># 真正异步的时钟域（不同晶振 / PLL）
+set_clock_groups -asynchronous \
+    -group {clk_core clk_core_d2} \
+    -group {clk_ddr} \
+    -group {clk_slow}
+
+# 时钟 mux 选择：两者永不同时活动
+set_clock_groups -physically_exclusive \
+    -group {clk_pll} -group {clk_xtal}</code></pre>
+<div class="bad">
+<p><strong>最常见的坑（<a href="#2-4-1">§2.4.1</a> 已遇到）</strong>：<code>set_clock_groups -asynchronous</code> 会把两组之间的<strong>所有</strong>路径设为 false path，包括那些你其实<strong>仍想限制绝对延迟</strong>的网络（如跨域复位线、异步 FIFO 的指针）。必须补：</p>
+<pre><code>set_max_delay 3.0 -datapath_only -from $src -to $dst</code></pre>
+<p><code>-datapath_only</code> 的作用是<strong>只算数据路径延迟，不算时钟路径延迟</strong>，这正是跨异步域时想要的。漏掉它会导致约束值被时钟延迟污染。</p>
+</div>
+
+<h3 id="16-4">16.4 I/O 时序类</h3>
+<p>芯片边界的约束。关键是理解<strong>延迟是「片外」的，参考的是虚拟时钟或端口时钟</strong>。</p>
+<table>
+<tr><th>命令</th><th>方向</th><th>含义</th></tr>
+<tr><td><code>set_input_delay</code></td><td>输入</td><td>数据到达输入端口的时刻（相对参考时钟沿）</td></tr>
+<tr><td><code>set_output_delay</code></td><td>输出</td><td>片外器件要求的 setup 时间（数据必须比时钟沿早这么多到）</td></tr>
+<tr><td><code>set_driving_cell</code></td><td>输入</td><td>假定输入端口由什么单元驱动，决定输入 transition</td></tr>
+<tr><td><code>set_load</code></td><td>输出</td><td>输出端口的片外负载电容</td></tr>
+<tr><td><code>set_input_transition</code></td><td>输入</td><td>直接指定输入沿的转换时间（与 driving_cell 二选一）</td></tr>
+</table>
+<pre><code># ---- 输入：源同步接口 ----
+create_clock -name vclk_in -period 10.0        ;# 虚拟时钟
+set_input_delay 2.0 -max -clock vclk_in [get_ports data_in*]
+set_input_delay 0.5 -min -clock vclk_in [get_ports data_in*]
+set_driving_cell -lib_cell BUFFD4 [get_ports data_in*]
+
+# ---- 输出：reg-to-pad（见 §14）----
+create_clock -name CLK_VBD -period 10.0        ;# 虚拟时钟，挂在端口上
+set_output_delay 3.0 -max -clock CLK_VBD [get_ports IO_PWM*]
+set_output_delay -1.0 -min -clock CLK_VBD [get_ports IO_PWM*]
+set_load 5.0 [get_ports IO_PWM*]
+
+# ---- 输出 bit 间 skew 控制（PWM 死区，见 §14.7）----
+set_max_delay 2.0 -from [get_pins u_pwm/*_reg/Q] -to [get_ports IO_PWM*]
+set_min_delay 1.0 -from [get_pins u_pwm/*_reg/Q] -to [get_ports IO_PWM*]</code></pre>
+<div class="warn">
+<p><code>set_output_delay</code> 的符号容易搞反：它表示<strong>片外逻辑需要占用的时间</strong>。值越大，留给片内的时间越少，约束越紧。<code>-min</code> 为负值很常见，表示片外器件的 hold 要求是负的（允许数据在时钟沿后一小段才稳定）。</p>
+</div>
+
+<h3 id="16-5">16.5 时序例外类</h3>
+<p>第二部分（<a href="#7">§7</a>~<a href="#12">§12</a>）已详述 MCP，这里给出四兄弟的选择决策：</p>
+<table>
+<tr><th>场景</th><th>该用什么</th><th>理由</th></tr>
+<tr><td>路径功能上永不发生（如测试模式专用逻辑）</td><td><code>set_false_path</code></td><td>完全不检查，不占优化资源</td></tr>
+<tr><td>跨真正异步时钟域，且有同步器</td><td><code>set_clock_groups -asynchronous</code> + <code>set_max_delay -datapath_only</code></td><td>不定时但限制绝对延迟</td></tr>
+<tr><td>同步路径，数据多周期才被采样（有握手/使能保证）</td><td><code>set_multicycle_path</code>（setup N + hold N−1）</td><td>移动检查沿，仍做真实检查</td></tr>
+<tr><td>纯组合路径、或需要绝对时间上限</td><td><code>set_max_delay</code> / <code>set_min_delay</code></td><td>不依赖时钟周期</td></tr>
+<tr><td>某信号在当前模式下恒为常量</td><td><code>set_case_analysis</code></td><td>同时简化时序和功耗分析</td></tr>
+<tr><td>路径穿过某个特定点才例外</td><td>加 <code>-through</code></td><td>精确限定作用域</td></tr>
+</table>
+<pre><code># MCP：setup 与 hold 必须配对（见 §9）
+set_multicycle_path -setup 2 -from [get_pins u_src/data_reg*/Q] \
+                             -to   [get_pins u_dst/data_reg*/D]
+set_multicycle_path -hold  1 -from [get_pins u_src/data_reg*/Q] \
+                             -to   [get_pins u_dst/data_reg*/D]
+
+# 模式信号固定：scan_mode 功能态恒为 0
+set_case_analysis 0 [get_ports scan_mode]
+
+# 测试逻辑不参与功能时序
+set_false_path -from [get_ports test_*]
+set_false_path -to   [get_ports debug_out*]
+
+# 异步复位的断言沿不是时序问题（见 §2.4.1）
+set_false_path -from [get_ports por_n]</code></pre>
+
+<h3 id="16-6">16.6 设计规则与环境类</h3>
+<pre><code># ---- DRC 类：这些是硬约束，优先级高于时序 ----
+set_max_transition  0.15 [current_design]
+set_max_capacitance 0.30 [current_design]
+set_max_fanout      32   [current_design]
+
+# 时钟网络用更严的规则
+set_max_transition 0.08 -clock_path [all_clocks]
+
+# ---- 环境类 ----
+set_operating_conditions -max ss0p81v125c -min ff0p99vm40c
+set_wire_load_model -name wl10 -library tcbn05
+
+# ---- 面积 ----
+set_max_area 0</code></pre>
+
+<h3 id="16-7">16.7 优化保护类</h3>
+<p>复位同步器、CDC 同步器、模拟接口都需要防止被工具「优化掉」：</p>
+<table>
+<tr><th>命令</th><th>禁止的行为</th><th>允许的行为</th></tr>
+<tr><td><code>set_dont_touch</code></td><td>任何修改：删除、复制、合并、改尺寸</td><td>无</td></tr>
+<tr><td><code>set_size_only</code></td><td>删除、复制、合并、retime</td><td><strong>改驱动强度</strong></td></tr>
+<tr><td><code>set_dont_use</code></td><td>库中某个单元被整体禁用</td><td>—</td></tr>
+<tr><td><code>set_ideal_network</code></td><td>缓冲、DRC 修复</td><td>综合阶段当理想线处理</td></tr>
+</table>
+<pre><code># 同步器 FF 允许调驱动，但不能被 clone / merge / retime（见 §13.5）
+set_size_only -all_instances [get_cells -hier *sync_q_reg*]
+
+# 复位源聚合的组合逻辑不能被拆分或复制
+set_dont_touch [get_cells -hier *rst_async_n*]
+
+# 综合阶段把复位网络当理想线，CTS 时再真实处理
+set_ideal_network [get_nets u_rst_core/rst_n]</code></pre>
+<div class="good">
+<p><strong>优先用 <code>set_size_only</code> 而非 <code>set_dont_touch</code>。</strong><code>dont_touch</code> 连驱动强度都不让改，结果同步器带大负载时 transition 严重超标，反而恶化亚稳态窗口。<code>size_only</code> 保住结构的同时允许工具修 DRC。</p>
+</div>
+
+<h3 id="16-8">16.8 常用查询命令（写约束时的辅助）</h3>
+<pre><code># 对象是否存在 —— 写约束前必查，返回空就是约束没命中
+get_ports  IO_PWM*
+get_pins   u_rst_core/sync_q_reg*/Q
+get_cells  -hier *rst_sync*
+get_nets   -hier *rst_glb_n*
+get_clocks *
+
+# 集合类
+all_clocks
+all_inputs
+all_outputs
+all_registers -clock [get_clocks clk_core]
+all_fanout -from [get_pins u_rst_core/rst_n] -flat -endpoints_only
+
+# 过滤
+get_cells -hier * -filter "ref_name =~ CKLNQ*"          ;# 找所有 ICG
+get_pins  -hier * -filter "full_name =~ *_reg*/RN"      ;# 找所有异步复位脚
+get_ports * -filter "direction == inout"                 ;# 找所有双向口</code></pre>
+<div class="warn">
+<p><strong>空集合不报错</strong>是 SDC 最阴险的地方。<code>set_false_path -from [get_pins typo_name/Q]</code> 里的 pin 名写错，工具只会给一句 warning（甚至没有），约束静默失效。必须用 <a href="#15">§15</a> 的 <code>report_exceptions -ignored</code> 复查。</p>
+</div>
+
+<h3 id="16-9">16.9 高频易错点汇总</h3>
+<table>
+<tr><th>#</th><th>错误</th><th>后果</th><th>正确做法</th></tr>
+<tr><td>1</td><td>MCP 只写 setup 不写 hold</td><td>hold 检查沿错位，硅上 hold fail</td><td><code>-hold (N−1)</code> 配 <code>-setup N</code>（<a href="#9">§9</a>）</td></tr>
+<tr><td>2</td><td><code>set_clock_groups</code> 后不补 <code>set_max_delay</code></td><td>跨域线延迟失控</td><td>补 <code>-datapath_only</code> 约束（<a href="#16-3">§16.3</a>）</td></tr>
+<tr><td>3</td><td>对象名写错导致空集合</td><td>约束静默失效</td><td><code>report_exceptions -ignored</code></td></tr>
+<tr><td>4</td><td>虚拟时钟周期与真实接口不符</td><td>I/O 时序假收敛</td><td>核对 datasheet 的 setup/hold</td></tr>
+<tr><td>5</td><td>忘记 <code>set_propagated_clock</code></td><td>CTS 后仍用理想时钟，skew 未计入</td><td>PnR 流程中切换</td></tr>
+<tr><td>6</td><td>ICG 输出误加 <code>create_generated_clock</code></td><td>时钟门控检查丢失</td><td>标准 ICG 不需定义（<a href="#16-2">§16.2</a>）</td></tr>
+<tr><td>7</td><td>同步器用 <code>dont_touch</code> 导致 transition 超标</td><td>MTBF 反而变差</td><td>改用 <code>set_size_only</code>（<a href="#16-7">§16.7</a>）</td></tr>
+<tr><td>8</td><td><code>-from</code>/<code>-to</code> 用了错误的 pin 方向</td><td>路径根本不存在</td><td><code>-from</code> 用 <code>/Q</code>，<code>-to</code> 用 <code>/D</code> 或 <code>/RN</code></td></tr>
+<tr><td>9</td><td>例外命令写在 <code>create_clock</code> 之前</td><td>时钟对象不存在，命令失败</td><td>严格按 <a href="#16-1">§16.1</a> 骨架顺序</td></tr>
+<tr><td>10</td><td>对双向口只约束一个方向</td><td>另一方向未定时</td><td><code>report_port -verbose</code> 确认后两方向都约束</td></tr>
 </table>
 
 <footer>本文整理自一次关于复位架构与 SDC 多周期约束的技术讨论。</footer>
