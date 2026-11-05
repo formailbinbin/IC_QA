@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>跨时钟域 CDC：设计、约束与验证</title>
+<style>:root{--bg:#ffffff;--fg:#1f2328;--muted:#656d76;--line:#d1d9e0;--code-bg:#f6f8fa;--accent:#0969da;--warn-bg:#fff8c5;--warn-line:#d4a72c;--ok-bg:#dafbe1;--ok-line:#2da44e;--bad-bg:#ffebe9;--bad-line:#cf222e}
+*{box-sizing:border-box}
+body{margin:0;padding:0 24px 80px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans","PingFang SC","Microsoft YaHei",Helvetica,Arial,sans-serif;font-size:16px;line-height:1.7;color:var(--fg);background:var(--bg)}
+.wrap{max-width:900px;margin:0 auto}
+header{padding:40px 0 8px}
+h1{font-size:30px;font-weight:600;margin:0 0 8px;line-height:1.3}
+header .sub{color:var(--muted);font-size:15px;margin:0}
+h2{font-size:23px;font-weight:600;margin:48px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+h3{font-size:18px;font-weight:600;margin:32px 0 12px}
+h4{font-size:16px;font-weight:600;margin:24px 0 8px}
+h5{font-size:14.5px;font-weight:600;margin:20px 0 6px;color:var(--accent)}
+p{margin:12px 0}
+ul,ol{margin:12px 0;padding-left:26px}
+li{margin:6px 0}
+code{font-family:ui-monospace,Consolas,"Courier New",monospace;font-size:13.5px;background:var(--code-bg);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin:16px 0;overflow-x:auto}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.55}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14.5px}
+th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+th{background:var(--code-bg);font-weight:600}
+.note,.warn,.good,.bad{padding:12px 16px;margin:16px 0;border-radius:6px;border-left:4px solid var(--accent);background:#ddf4ff}
+.warn{border-left-color:var(--warn-line);background:var(--warn-bg)}
+.good{border-left-color:var(--ok-line);background:var(--ok-bg)}
+.bad{border-left-color:var(--bad-line);background:var(--bad-bg)}
+.note p:first-child,.warn p:first-child,.good p:first-child,.bad p:first-child{margin-top:0}
+.note p:last-child,.warn p:last-child,.good p:last-child,.bad p:last-child{margin-bottom:0}
+.diagram{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:18px;margin:16px 0;overflow-x:auto;font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre}
+.formula{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:14px 18px;margin:16px 0;text-align:center;font-family:ui-monospace,Consolas,monospace;font-size:15px;overflow-x:auto}
+.fileref{font-family:ui-monospace,Consolas,monospace;font-size:13.5px;color:var(--accent)}
+.mindmap{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:24px 20px;margin:20px 0;overflow-x:auto}
+.mindmap ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;justify-content:center}
+.mindmap li{display:flex;align-items:center;position:relative;margin:0;padding:3px 0}
+.mindmap li>ul{position:relative;padding-left:34px;margin:0}
+.mindmap li>ul::before{content:"";position:absolute;left:0;top:50%;width:16px;border-top:1px solid var(--line)}
+.mindmap li>ul>li::before{content:"";position:absolute;left:-18px;top:50%;width:18px;border-top:1px solid var(--line)}
+.mindmap li>ul>li::after{content:"";position:absolute;left:-18px;top:0;bottom:0;border-left:1px solid var(--line)}
+.mindmap li>ul>li:first-child::after{top:50%}
+.mindmap li>ul>li:last-child::after{bottom:50%}
+.mindmap li>ul>li:only-child::after{display:none}
+.mindmap .n{display:inline-block;white-space:nowrap;padding:5px 11px;border-radius:5px;border:1px solid var(--line);background:#fff;font-size:13.5px;line-height:1.4;text-decoration:none;color:var(--fg)}
+.mindmap a.n:hover{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 2px #ddf4ff}
+.mindmap .l0{background:var(--accent);color:#fff;border-color:var(--accent);font-size:16px;font-weight:600;padding:9px 18px}
+.mindmap .l1{background:#ddf4ff;border-color:#9fd0fb;font-weight:600;color:#0a4a82}
+.mindmap .hot{background:var(--ok-bg);border-color:var(--ok-line);font-weight:600}
+.mindmap .risk{background:var(--bad-bg);border-color:var(--bad-line)}
+.mindmap .tag{color:var(--muted);font-size:12px;font-weight:400;margin-left:6px}
+.mm-legend{display:flex;flex-wrap:wrap;gap:16px;margin:10px 0 0;padding-top:12px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.mm-legend span::before{content:"";display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid var(--line)}
+.mm-legend .k-hot::before{background:var(--ok-bg);border-color:var(--ok-line)}
+.mm-legend .k-risk::before{background:var(--bad-bg);border-color:var(--bad-line)}
+.mm-legend .k-norm::before{background:#fff}
+.part{margin:72px 0 8px;padding:16px 20px;border-radius:8px;background:#ddf4ff;border:1px solid #9fd0fb}
+.part .pn{font-size:12px;color:var(--accent);font-weight:600;letter-spacing:1px}
+.part h2{border:0;margin:2px 0 0;padding:0;font-size:26px}
+.part .pd{margin:6px 0 0;color:#4a5a6a;font-size:14px}
+footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+#nav{position:fixed;top:0;left:0;width:264px;height:100vh;overflow-y:auto;padding:28px 14px 40px;background:var(--code-bg);border-right:1px solid var(--line);font-size:13.5px;line-height:1.5;z-index:20}
+#nav .nav-title{font-weight:600;font-size:14px;margin:0 0 12px;padding-left:8px;color:var(--fg)}
+#nav a{display:block;color:var(--muted);text-decoration:none;padding:3px 8px;border-radius:4px;border-left:2px solid transparent}
+#nav a:hover{background:#eaeef2;color:var(--fg)}
+#nav a.active{color:var(--accent);background:#ddf4ff;border-left-color:var(--accent);font-weight:600}
+#nav a.lv1{font-weight:600;color:var(--fg);margin-top:10px}
+#nav a.lv2{padding-left:20px}
+#nav a.lv3{padding-left:34px;font-size:13px}
+#nav a.lv4{padding-left:48px;font-size:12.5px}
+body.has-nav .wrap{margin-left:264px}
+#nav-toggle{display:none;position:fixed;top:12px;left:12px;z-index:30;width:38px;height:38px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:17px;cursor:pointer}
+@media (max-width:1180px){#nav{transform:translateX(-100%);transition:transform .2s ease}#nav.open{transform:none;box-shadow:0 0 0 100vmax rgba(0,0,0,.25)}body.has-nav .wrap{margin-left:0}#nav-toggle{display:block}header{padding-top:60px}}</style>
+</head>
+<body class="has-nav">
+<button id="nav-toggle" title="目录">☰</button>
+<nav id="nav">
+<p class="nav-title">目录</p>
+<a class="lv1" href="#P1">第一部分 · CDC 概述</a>
+<a class="lv2" href="#0">0. CDC 全景图</a>
+<a class="lv2" href="#1">1. 什么是 CDC</a>
+<a class="lv3" href="#1-1">1.1 异步的三种形态</a>
+<a class="lv3" href="#1-2">1.2 亚稳态与 MTBF</a>
+<a class="lv3" href="#1-3">1.3 为什么要引入 MTBF</a>
+<a class="lv2" href="#2">2. CDC 的四类失效模式</a>
+<a class="lv3" href="#2-1">2.1 亚稳态传播</a>
+<a class="lv3" href="#2-2">2.2 数据丢失（快到慢）</a>
+<a class="lv3" href="#2-3">2.3 数据不一致（多 bit）</a>
+<a class="lv3" href="#2-4">2.4 重汇聚与毛刺</a>
+<a class="lv1" href="#P2">第二部分 · 分类与同步方案</a>
+<a class="lv2" href="#3">3. CDC 分类思维导图</a>
+<a class="lv2" href="#4">4. 单 bit 同步</a>
+<a class="lv3" href="#4-1">4.1 两级同步器（慢到快）</a>
+<a class="lv3" href="#4-2">4.2 快到慢：脉冲展宽</a>
+<a class="lv3" href="#4-3">4.3 快到慢：双触发握手</a>
+<a class="lv3" href="#4-4">4.4 单 bit 选型表</a>
+<a class="lv2" href="#5">5. 多 bit 同步</a>
+<a class="lv3" href="#5-1">5.1 格雷码</a>
+<a class="lv3" href="#5-2">5.2 MUX 同步（数据冻结）</a>
+<a class="lv3" href="#5-3">5.3 握手</a>
+<a class="lv3" href="#5-4">5.4 异步 FIFO</a>
+<a class="lv3" href="#5-5">5.5 多 bit 选型表</a>
+<a class="lv2" href="#6">6. 选型决策流程</a>
+<a class="lv1" href="#P3">第三部分 · 设计实现保证</a>
+<a class="lv2" href="#7">7. 结构化设计规则</a>
+<a class="lv2" href="#8">8. 同步器前后的禁忌</a>
+<a class="lv2" href="#9">9. 异步 FIFO 实现要点</a>
+<a class="lv2" href="#10">10. 复位域交叉 RDC</a>
+<a class="lv2" href="#11">11. 典型 Bug 清单</a>
+<a class="lv1" href="#P4">第四部分 · 约束与 CDC 工具</a>
+<a class="lv2" href="#12">12. SDC 侧约束</a>
+<a class="lv3" href="#12-1">12.1 clock_groups</a>
+<a class="lv3" href="#12-2">12.2 max_delay -datapath_only</a>
+<a class="lv3" href="#12-3">12.3 保护同步器</a>
+<a class="lv2" href="#13">13. CDC 工具与流程</a>
+<a class="lv3" href="#13-1">13.1 三类检查引擎</a>
+<a class="lv3" href="#13-2">13.2 SGDC / 工具约束</a>
+<a class="lv3" href="#13-3">13.3 Waiver 管理</a>
+<a class="lv3" href="#13-4">13.4 签核流程</a>
+<a class="lv1" href="#P5">第五部分 · 验证</a>
+<a class="lv2" href="#14">14. 验证的四层防线</a>
+<a class="lv2" href="#15">15. 仿真层面</a>
+<a class="lv3" href="#15-1">15.1 时钟随机化</a>
+<a class="lv3" href="#15-2">15.2 亚稳态注入</a>
+<a class="lv3" href="#15-3">15.3 注入仿真的能力边界</a>
+<a class="lv2" href="#16">16. SVA 断言库</a>
+<a class="lv2" href="#17">17. 形式验证</a>
+<a class="lv2" href="#18">18. 覆盖率与签核清单</a>
+</nav>
+<div class="wrap">
+<header>
+<h1>跨时钟域 CDC：设计、约束与验证</h1>
+<p class="sub">亚稳态与 MTBF · 单 bit / 多 bit 分类思维导图 · 同步器与异步 FIFO 实现 · SDC 与 CDC 工具约束 · 仿真 / 亚稳态注入 / SVA / 形式验证</p>
+</header>
+
+<div class="part" id="P1">
+<div class="pn">第 一 部 分</div>
+<h2>CDC 概述</h2>
+<p class="pd">先说清 CDC 到底是什么问题、物理根源在哪（亚稳态与 MTBF），再把它造成的失效拆成四类独立模式——后面所有方案都是在堵这四个洞。</p>
+</div>
+
+<h2 id="0">0. CDC 全景图</h2>
+<p>下图是全文框架，每个节点可点击跳转到对应章节。</p>
+<div class="mindmap">
+<ul>
+<li><span class="n l0">CDC</span>
+  <ul>
+    <li><a class="n l1" href="#2">问题本质<span class="tag">四类失效</span></a>
+      <ul>
+        <li><a class="n risk" href="#2-1">亚稳态传播<span class="tag">物理层</span></a></li>
+        <li><a class="n risk" href="#2-2">数据丢失<span class="tag">快到慢采不到</span></a></li>
+        <li><a class="n risk" href="#2-3">数据不一致<span class="tag">多 bit 错位</span></a></li>
+        <li><a class="n risk" href="#2-4">重汇聚 / 毛刺<span class="tag">同步后再组合</span></a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#3">同步方案<span class="tag">按位宽分</span></a>
+      <ul>
+        <li><a class="n hot" href="#4">单 bit</a>
+          <ul>
+            <li><a class="n hot" href="#4-1">两级同步器<span class="tag">电平信号 · 慢到快</span></a></li>
+            <li><a class="n" href="#4-2">脉冲展宽<span class="tag">快到慢 · toggle/stretch</span></a></li>
+            <li><a class="n" href="#4-3">双向握手<span class="tag">任意频率比 · 最稳</span></a></li>
+          </ul>
+        </li>
+        <li><a class="n hot" href="#5">多 bit</a>
+          <ul>
+            <li><a class="n" href="#5-1">格雷码<span class="tag">仅限 ±1 递变</span></a></li>
+            <li><a class="n hot" href="#5-2">MUX 同步<span class="tag">数据冻结 + 单 bit 使能</span></a></li>
+            <li><a class="n" href="#5-3">握手<span class="tag">req/ack · 低吞吐</span></a></li>
+            <li><a class="n hot" href="#5-4">异步 FIFO<span class="tag">高吞吐 · 面积大</span></a></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#7">设计保证<span class="tag">怎么写不出错</span></a>
+      <ul>
+        <li><a class="n hot" href="#7">同步器封装成库单元<span class="tag">禁止散写</span></a></li>
+        <li><a class="n risk" href="#8">同步器前不许组合逻辑</a></li>
+        <li><a class="n risk" href="#8">同一源信号不许走两条同步路径</a></li>
+        <li><a class="n" href="#9">异步 FIFO 指针用格雷码</a></li>
+        <li><a class="n risk" href="#10">复位域交叉 RDC</a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#12">约束 &amp; 工具</a>
+      <ul>
+        <li><a class="n" href="#12-1">set_clock_groups -asynchronous</a></li>
+        <li><a class="n hot" href="#12-2">set_max_delay -datapath_only<span class="tag">控线延迟</span></a></li>
+        <li><a class="n" href="#12-3">set_size_only<span class="tag">保护同步器</span></a></li>
+        <li><a class="n hot" href="#13-1">CDC 工具<span class="tag">结构 + 形式 + 动态</span></a></li>
+        <li><a class="n risk" href="#13-3">Waiver 失控<span class="tag">最大管理风险</span></a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#14">验证<span class="tag">四层防线</span></a>
+      <ul>
+        <li><a class="n" href="#13-1">静态结构检查<span class="tag">第一道</span></a></li>
+        <li><a class="n hot" href="#15-2">亚稳态注入仿真<span class="tag">抖动模型</span></a></li>
+        <li><a class="n hot" href="#16">SVA 协议断言<span class="tag">stable / gray / handshake</span></a></li>
+        <li><a class="n" href="#17">形式验证<span class="tag">证明同步协议</span></a></li>
+        <li><a class="n" href="#18">覆盖率与签核清单</a></li>
+      </ul>
+    </li>
+  </ul>
+</li>
+</ul>
+<div class="mm-legend">
+<span class="k-hot">工业界常用</span>
+<span class="k-risk">风险点 / 陷阱</span>
+<span class="k-norm">一般选项</span>
+</div>
+</div>
+
+<h2 id="1">1. 什么是 CDC</h2>
+<p><strong>CDC（Clock Domain Crossing，跨时钟域）</strong>指一个信号由时钟 A 驱动的触发器产生，却被时钟 B 驱动的触发器采样。只要 A 和 B 之间没有固定的相位关系，接收端采样时刻与发送端数据变化时刻的关系就是<strong>随机的</strong>，必然存在采样点落在数据跳变窗口内的情况。</p>
+<div class="diagram">    clk_a 域                        clk_b 域
+  ┌─────────┐                     ┌─────────┐
+  │   FF_A  │──── data_a ────────▶│   FF_B  │
+  └────▲────┘      ↑              └────▲────┘
+       │           │                   │
+     clk_a    这根线就是 CDC 路径     clk_b
+              (crossing / 异步路径)
+
+  STA 无法对它做 setup/hold 检查 —— 两个时钟没有共同参考，
+  "采样沿到数据沿"的距离在每个周期都不同。</div>
+
+<h3 id="1-1">1.1 异步的三种形态</h3>
+<p>不是所有「不同时钟」都算异步。判定 CDC 的唯一标准是：<strong>两个时钟沿的相对位置能否在 STA 里被静态确定</strong>。</p>
+<table>
+<tr><th>关系</th><th>举例</th><th>是否 CDC</th><th>处理方式</th></tr>
+<tr><td><strong>同源同步</strong></td><td>100 MHz 与其 /2 分频 50 MHz，同一 PLL</td><td>否</td><td>正常 STA，必要时 MCP</td></tr>
+<tr><td><strong>同源但比例非整数</strong></td><td>同 PLL 出的 300 MHz 与 200 MHz</td><td>否（但窗口极窄）</td><td>STA 可算，收敛很难，常退化成异步处理</td></tr>
+<tr><td><strong>异源异步</strong></td><td>SoC 核心时钟 vs 外部 25 MHz 晶振 / USB 48 MHz</td><td><strong>是</strong></td><td>必须同步器 + CDC 工具签核</td></tr>
+<tr><td><strong>同频不同相且相位未定</strong></td><td>两个独立 PLL 都出 100 MHz</td><td><strong>是</strong></td><td>同上，频率相同不代表同步</td></tr>
+</table>
+<div class="warn">
+<p><strong>最常见的误判</strong>：「频率一样所以不用同步」。两个独立 PLL 即使标称同频，也有 ppm 级频差和未知初相，长时间运行必然出现采样点扫过数据跳变沿的情况，是标准 CDC。</p>
+</div>
+
+<h3 id="1-2">1.2 亚稳态与 MTBF</h3>
+<p>触发器要正确锁存，数据必须在时钟沿前 <code>t_setup</code> 稳定、沿后 <code>t_hold</code> 保持。若数据在这个窗口内跳变，触发器内部的锁存环路可能停在逻辑 0 与 1 之间的亚稳点，经过一段<strong>不确定</strong>的解析时间后才随机塌陷到 0 或 1。</p>
+<div class="diagram">            ┌──────┐
+  data ─────┤ ╱╲   │      正常：解析时间 &lt; 一个周期，下一级采到稳定值
+            │╱  ╲  │
+  clk  ──┐  │    ╲ │      亚稳态：输出在 Vdd/2 附近停留
+         └──┤     ╲│      ──┐        ┌────  ← 下游可能采到中间电平
+            └──────┘        └~~~~~~~~┘
+                             ↑ 不确定的解析时间 t_r</div>
+<p>亚稳态<strong>不可能被消除</strong>，只能把它发生并传播出去的概率压到可接受范围。衡量指标是 MTBF（Mean Time Between Failures）：</p>
+<div class="formula">MTBF = e^(t_r / τ) / (T_w × f_clk × f_data)</div>
+<table>
+<tr><th>符号</th><th>含义</th><th>怎么影响 MTBF</th></tr>
+<tr><td><code>t_r</code></td><td>留给亚稳态解析的时间（同步器两级之间的可用时间，≈ T_clk − t_setup − t_prop）</td><td><strong>指数项</strong>，最有效的杠杆</td></tr>
+<tr><td><code>τ</code></td><td>工艺相关的解析时间常数</td><td>工艺决定，设计不可控</td></tr>
+<tr><td><code>T_w</code></td><td>有效亚稳态窗口宽度</td><td>FF 单元决定；专用同步器单元更小</td></tr>
+<tr><td><code>f_clk</code></td><td>接收端时钟频率</td><td>越快越差</td></tr>
+<tr><td><code>f_data</code></td><td>源数据的跳变率</td><td>跳变越频繁越差</td></tr>
+</table>
+<div class="note">
+<p>关键结论：<code>t_r</code> 在指数位置上，所以<strong>加一级同步器</strong>（把 <code>t_r</code> 从「半个周期」变成「一个完整周期」）通常能把 MTBF 从「天」提高到「上万年」。这就是两级同步器成为业界标配的原因；超高频下才需要三级。</p>
+</div>
+<div class="bad">
+<p>反过来也说明：如果把同步器两级 FF 之间插入组合逻辑、或让它们之间的布线延迟很大，<code>t_r</code> 就被吃掉，MTBF 指数级恶化。这是 <a href="#12-2">§12.2</a> 要用 <code>set_max_delay</code> 而不是单纯 <code>set_false_path</code> 的根本原因。</p>
+</div>
+
+<h3 id="1-3">1.3 为什么 CDC 方案要引入 MTBF</h3>
+<p>MTBF 不是为了"算出一个好看的数字"，而是因为 CDC 这件事<strong>在本质上无法用「对 / 错」来判定</strong>，只能用概率来判定。下面分三层说明：为什么必须引入、公式从哪来、以及工程上怎么用。</p>
+
+<h4>（1）引入原因：同步路径没有 slack，MTBF 就是它的 slack</h4>
+<table>
+<tr><th>原因</th><th>说明</th></tr>
+<tr><td><strong>亚稳态不可消除，只能压概率</strong></td><td>只要两个时钟异步，源数据跳变就<strong>一定</strong>有落进 setup/hold 窗口的时刻。没有任何电路能让这个概率变成 0，所以"有没有 bug"这个问法本身就不成立，只能问"多久出一次"</td></tr>
+<tr><td><strong>STA 对异步路径失效</strong></td><td>异步路径被 <code>set_clock_groups -asynchronous</code> 排除后，<strong>没有 slack 报告</strong>。同步器级间那段路径虽然是同步的，但它的意义不是"满足 setup"，而是"留多少解析时间"。MTBF 就是异步跨越的等效 slack</td></tr>
+<tr><td><strong>需要可量化的签核判据</strong></td><td>"加两级同步器"是经验做法，<strong>两级够不够是频率的函数</strong>。只有 MTBF 能回答"这颗 2 GHz 的芯片还能不能只用两级"，把设计决策从拍脑袋变成算账</td></tr>
+<tr><td><strong>仿真验不到</strong></td><td>RTL 仿真和注入仿真都抓不到真实概率（见 <a href="#15-3">§15.3</a>）。MTBF 是唯一能在流片前给出<strong>定量</strong>置信度的手段</td></tr>
+<tr><td><strong>对接可靠性指标</strong></td><td>汽车/工业芯片要报 FIT 率（每 10⁹ 小时失效次数）。<code>FIT = 10⁹ / MTBF(小时)</code>，CDC 必须能折算进整芯片的可靠性预算</td></tr>
+</table>
+
+<h4>（2）公式原理：失效率 = 进入概率 × 未解析完的概率</h4>
+<p>MTBF 的推导只有两步，都很直观：</p>
+<p><strong>第一步，多久进一次亚稳态？</strong>源数据跳变只有落在宽度为 <code>T_w</code> 的危险窗口内才会引发亚稳态。两个时钟异步，意味着跳变沿相对于时钟沿的位置在一个周期内<strong>均匀分布</strong>。于是单位时间内的"危险事件"次数为：</p>
+<div class="formula">f_danger = T_w × f_clk × f_data</div>
+<p>（接收时钟每秒给出 <code>f_clk</code> 次采样机会，数据每秒跳变 <code>f_data</code> 次，每次命中窗口的概率是 <code>T_w / T_clk</code>，相乘即得。）</p>
+<p><strong>第二步，进去之后多久还没出来？</strong>触发器进入亚稳态后，内部锁存环路的偏离量按时间常数 <code>τ</code> <strong>指数发散</strong>，等价于"经过时间 <code>t_r</code> 后仍未判决"的概率为：</p>
+<div class="formula">P(未解析完 | 等待 t_r) = e^(−t_r / τ)</div>
+<p><strong>两者相乘就是失效率，取倒数就是 MTBF：</strong></p>
+<div class="formula">λ_fail = T_w × f_clk × f_data × e^(−t_r / τ)　　⇒　　MTBF = 1 / λ_fail = e^(t_r / τ) / (T_w × f_clk × f_data)</div>
+<div class="note">
+<p>这个推导解释了公式的全部结构：<strong>分母是"多久撞一次"（线性项，全是频率）</strong>，<strong>分子是"撞了之后能不能自己恢复"（指数项，是时间）</strong>。这也是为什么所有优化手段都优先去抢 <code>t_r</code>——它是唯一在指数位置上的变量。</p>
+</div>
+
+<h4>（3）数量级直觉：为什么单级不行、两级就够</h4>
+<p>用一组典型的 0.25 µm 工艺参数代入，可以直观看到两级同步器的意义：</p>
+<table>
+<tr><th>参数</th><th>取值</th></tr>
+<tr><td><code>τ</code>（解析时间常数）</td><td>0.31 ns</td></tr>
+<tr><td><code>T_w</code>（亚稳态窗口）</td><td>9.6 as（阿秒，10⁻¹⁸ s）</td></tr>
+<tr><td><code>f_clk</code>（接收时钟）</td><td>100 MHz</td></tr>
+<tr><td><code>f_data</code>（数据跳变率）</td><td>10 MHz</td></tr>
+<tr><td><code>t_r</code>（单级可用解析时间）</td><td>2.3 ns</td></tr>
+</table>
+<table>
+<tr><th>方案</th><th>有效 <code>t_r</code></th><th>MTBF</th><th>结论</th></tr>
+<tr><td><strong>单级 FF</strong></td><td>约 2.3 ns（只有本拍残余时间）</td><td><strong>≈ 2 天</strong></td><td>完全不可接受</td></tr>
+<tr><td><strong>两级同步器</strong></td><td>多出一个完整周期（≈ 12.3 ns）</td><td><strong>≈ 10⁹ 年量级</strong></td><td>远超产品寿命，可接受</td></tr>
+</table>
+<p><code>t_r</code> 只增加了一个时钟周期，MTBF 却跨越了<strong>十几个数量级</strong>——这正是 <code>e^(t_r/τ)</code> 指数项的威力，也是"两级同步器"成为业界默认标配的全部理由。</p>
+<div class="warn">
+<p><strong>一个常见的错误算法</strong>：有资料把两级同步器的 MTBF 写成"两个单级 MTBF 相乘"。这只是个粗略的类比，<strong>并不严谨</strong>——两级失效并非独立事件。正确做法是把 <code>t_r</code> 取为<strong>第一级 Q 到第二级 D 之间实际可用的解析时间</strong>（≈ <code>T_clk − t_setup − t_clk2q − t_wire</code>），代入同一个公式。这也再次说明为什么级间多插一个 buffer 都会伤害 MTBF。</p>
+</div>
+
+<h4>（4）工程上怎么用这个数</h4>
+<table>
+<tr><th>用法</th><th>做法</th></tr>
+<tr><td><strong>定同步器级数</strong></td><td>高频设计中 <code>T_clk</code> 变小 ⇒ <code>t_r</code> 变小 ⇒ MTBF 指数级下降。算一下若两级不够（例如 &lt; 10⁵ 年），就上三级。级数是算出来的，不是抄出来的</td></tr>
+<tr><td><strong>系统级累加</strong></td><td>芯片里有 N 条 crossing，整体失效率是各条相加：<code>MTBF_chip ≈ MTBF_single / N</code>。再乘上出货量：<code>MTBF_fleet ≈ MTBF_chip / N_chip</code>。单条 10⁶ 年，1000 条 crossing、100 万颗芯片，整体就只剩 1 年量级——<strong>这就是为什么单条的目标值必须定得极高</strong></td></tr>
+<tr><td><strong>选同步器单元</strong></td><td>库里的专用同步 FF（<code>ASYNC_REG</code> / <code>SYNC_DFF</code>）<code>T_w</code> 和 <code>τ</code> 都更优，常比普通 FF 好几个数量级。<a href="#7">§7</a> 的 R1 要求库化封装，本质就是锁定这个参数</td></tr>
+<tr><td><strong>反推约束</strong></td><td>MTBF 对 <code>t_r</code> 极度敏感 ⇒ 必须用 <code>set_max_delay -datapath_only</code> 把级间延迟管住（<a href="#12-2">§12.2</a>），并用 <code>set_size_only</code> 禁止工具改动同步器（<a href="#12-3">§12.3</a>）</td></tr>
+<tr><td><strong>降 <code>f_data</code></strong></td><td>分母里的 <code>f_data</code> 是线性项，收益不如 <code>t_r</code>，但免费：源端不要让信号无谓地高频翻转（例如先在源域做好去抖/保持，再跨域）</td></tr>
+</table>
+<div class="bad">
+<p><strong>最后强调</strong>：MTBF 只描述<strong>第 1 类失效（亚稳态传播）</strong>。数据丢失、多 bit 不一致、重汇聚这三类（<a href="#2">§2</a>）是<strong>协议错误</strong>，发生概率远高于亚稳态，而且 MTBF 再大也救不了它们。看到"MTBF = 10⁹ 年"就认为 CDC 安全，是最典型的误读。</p>
+</div>
+
+<h2 id="2">2. CDC 的四类失效模式</h2>
+<p>把 CDC 问题拆成四类独立模式，设计时就能逐项确认是否已堵住。注意：<strong>加两级同步器只解决第 1 类</strong>，另外三类需要协议层面的手段。</p>
+
+<h3 id="2-1">2.1 亚稳态传播</h3>
+<p>接收域第一级 FF 捕获到亚稳态，且在它解析完成前就被下游使用，中间电平沿着组合逻辑扩散，下游不同分支可能解析出不同结果。</p>
+<p><strong>解法</strong>：两级（或更多级）同步器，第一级的输出只接第二级的 D，给足一个完整周期的解析时间。</p>
+
+<h3 id="2-2">2.2 数据丢失（快到慢）</h3>
+<p>发送域比接收域快时，一个只持续 1 个发送周期的脉冲，可能完全落在接收端两个时钟沿之间，被<strong>永久丢失</strong>。同步器对此毫无帮助——它只保证采到的值是稳定的，不保证能采到。</p>
+<div class="diagram">  clk_fast ─┐_┌─┐_┌─┐_┌─┐_┌─┐_┌─┐_┌─┐_┌─┐_┌─    (200 MHz)
+  pulse    ____┌─┐_______________________        宽度 = 1 × 5 ns
+  clk_slow ────┐______┌──────┐______┌─────       (25 MHz, 40 ns)
+                  ↑           ↑
+               采样点都错过了脉冲 → 丢失</div>
+<p><strong>解法</strong>：保证源信号在接收域至少宽于 <strong>1.5 ~ 2 个接收周期</strong>（经验值：<code>≥ 3</code> 个接收周期更保险），或改用 toggle/握手把「脉冲」转成「电平」（<a href="#4-2">§4.2</a>、<a href="#4-3">§4.3</a>）。</p>
+
+<h3 id="2-3">2.3 数据不一致（多 bit）</h3>
+<p>最隐蔽的一类。多个 bit 各自独立过同步器，由于每一位的亚稳态解析结果和布线延迟不同，接收端可能在某个周期采到一个<strong>从未在发送端出现过的中间值</strong>。</p>
+<div class="diagram">  发送端：3'b011 ──▶ 3'b100      (二进制计数器 +1，三位同时翻转)
+
+  接收端同步后可能看到：
+      011 → 111 → 100     ← 出现过 111，源端从未有过
+      011 → 000 → 100     ← 出现过 000
+      011 → 101 → 100     ← 出现过 101
+  如果下游拿这个值去比较"指针相等"判空，会误判。</div>
+<div class="bad">
+<p><strong>绝对禁止</strong>：多 bit 总线逐位接两级同步器然后直接使用。这是 CDC 工具报的最高频严重错误。<strong>唯一例外</strong>是能保证任意时刻只有一位变化的编码（格雷码，见 <a href="#5-1">§5.1</a>）。</p>
+</div>
+<p><strong>解法</strong>：格雷码、数据冻结 + 单 bit 使能同步（MUX 同步）、握手、异步 FIFO。核心思想都是<strong>把 N 个 bit 的同步问题降维成 1 个 bit 的同步问题</strong>。</p>
+
+<h3 id="2-4">2.4 重汇聚（reconvergence）与毛刺</h3>
+<p>两个子问题，都和「同步器之外的逻辑」有关。</p>
+<h4>（a）同步后重汇聚</h4>
+<p>同一个源信号分两路各自过一套同步器，再在接收域汇合到同一逻辑。两路的同步延迟可能相差 1 个周期，汇合点会出现瞬态非法组合。</p>
+<div class="diagram">            ┌── sync2 ──┐
+  src_a ────┤           ├── AND ──▶  可能出现两路错位 1 拍
+            └── sync2 ──┘            产生源端不存在的组合</div>
+<p><strong>解法</strong>：一个源信号只允许存在<strong>一条</strong>同步路径，同步后再分发（扇出）。</p>
+<h4>（b）发送端组合逻辑毛刺</h4>
+<p>同步器输入端若直接接组合逻辑输出，组合逻辑的毛刺会被接收时钟采样成一个完整的假脉冲——而且采不采到完全随机，仿真极难复现。</p>
+<p><strong>解法</strong>：同步器输入必须是<strong>发送域寄存器输出</strong>（FF 的 Q），不允许是组合逻辑。</p>
+
+<h3>四类模式小结</h3>
+<table>
+<tr><th>失效模式</th><th>两级同步器能解决？</th><th>真正的解法</th></tr>
+<tr><td>亚稳态传播</td><td><strong>能</strong></td><td>2~3 级同步器 + 控制 <code>t_r</code></td></tr>
+<tr><td>数据丢失（快到慢）</td><td>不能</td><td>脉冲展宽 / toggle / 握手</td></tr>
+<tr><td>多 bit 不一致</td><td>不能</td><td>格雷码 / MUX 同步 / 握手 / 异步 FIFO</td></tr>
+<tr><td>重汇聚与毛刺</td><td>不能</td><td>单一同步路径 + 输入必须是 FF 输出</td></tr>
+</table>
+
+<div class="part" id="P2">
+<div class="pn">第 二 部 分</div>
+<h2>CDC 分类与同步方案</h2>
+<p class="pd">按「单 bit / 多 bit」和「频率关系」两个维度展开。先给分类思维导图，再逐个方案给出电路、代码与适用边界，最后是选型决策流程。</p>
+</div>
+
+<h2 id="3">3. CDC 分类思维导图</h2>
+<p>CDC 方案的选择只取决于三个问题：<strong>几位？什么方向（快→慢 / 慢→快）？能不能反压？</strong></p>
+<div class="mindmap">
+<ul>
+<li><span class="n l0">CDC 分类</span>
+  <ul>
+    <li><a class="n l1" href="#4">单 bit<span class="tag">控制信号</span></a>
+      <ul>
+        <li><a class="n" href="#4-1">电平信号 level</a>
+          <ul>
+            <li><a class="n hot" href="#4-1">慢 → 快<span class="tag">两级同步器即可</span></a></li>
+            <li><a class="n" href="#4-1">快 → 慢<span class="tag">需保证宽度 ≥ 2T_slow</span></a></li>
+          </ul>
+        </li>
+        <li><a class="n" href="#4-2">脉冲信号 pulse</a>
+          <ul>
+            <li><a class="n" href="#4-2">脉冲展宽<span class="tag">stretcher · 简单</span></a></li>
+            <li><a class="n hot" href="#4-2">Toggle 同步<span class="tag">电平化 + 边沿检测</span></a></li>
+            <li><a class="n hot" href="#4-3">闭环握手<span class="tag">无丢失 · 延迟大</span></a></li>
+          </ul>
+        </li>
+        <li><a class="n risk" href="#4-3">高频脉冲流<span class="tag">间隔 &lt; 同步延迟 → 必丢</span></a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#5">多 bit<span class="tag">数据/地址/配置</span></a>
+      <ul>
+        <li><a class="n" href="#5-1">编码约束类</a>
+          <ul>
+            <li><a class="n hot" href="#5-1">格雷码<span class="tag">仅 ±1 递变 · FIFO 指针</span></a></li>
+            <li><a class="n risk" href="#5-1">二进制直接同步<span class="tag">禁止</span></a></li>
+          </ul>
+        </li>
+        <li><a class="n" href="#5-2">数据冻结类</a>
+          <ul>
+            <li><a class="n hot" href="#5-2">MUX 同步<span class="tag">数据不过同步器 · 最省</span></a></li>
+            <li><a class="n" href="#5-2">静态配置寄存器<span class="tag">只在复位后写</span></a></li>
+          </ul>
+        </li>
+        <li><a class="n" href="#5-3">协议类</a>
+          <ul>
+            <li><a class="n" href="#5-3">两相握手 req/ack<span class="tag">吞吐低</span></a></li>
+            <li><a class="n" href="#5-3">四相握手<span class="tag">全回零 · 最稳</span></a></li>
+          </ul>
+        </li>
+        <li><a class="n hot" href="#5-4">存储类</a>
+          <ul>
+            <li><a class="n hot" href="#5-4">异步 FIFO<span class="tag">高吞吐 · 面积大</span></a></li>
+            <li><a class="n" href="#5-4">异步双口 RAM + 格雷指针</a></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#6">选型关键变量</a>
+      <ul>
+        <li><a class="n" href="#6">频率比<span class="tag">方向决定是否会丢</span></a></li>
+        <li><a class="n" href="#6">吞吐要求<span class="tag">单次 / 流式</span></a></li>
+        <li><a class="n" href="#6">能否反压<span class="tag">决定握手 or FIFO</span></a></li>
+        <li><a class="n" href="#6">延迟容忍度<span class="tag">握手 ≈ 4~6 拍</span></a></li>
+      </ul>
+    </li>
+  </ul>
+</li>
+</ul>
+<div class="mm-legend">
+<span class="k-hot">工业界常用</span>
+<span class="k-risk">风险点 / 陷阱</span>
+<span class="k-norm">一般选项</span>
+</div>
+</div>
+
+<h2 id="4">4. 单 bit 同步</h2>
+
+<h3 id="4-1">4.1 两级同步器（慢到快的标准解）</h3>
+<p>最基础也是最重要的结构：接收域两个背靠背的 FF，中间不插任何逻辑。</p>
+<div class="diagram">   clk_a 域  │           clk_b 域
+             │
+  ┌──────┐   │   ┌──────┐     ┌──────┐
+  │ FF_A │───┼──▶│ FF_1 │────▶│ FF_2 │───▶ sync_out (干净)
+  └───▲──┘   │   └───▲──┘     └───▲──┘
+    clk_a    │     clk_b        clk_b
+             │       ↑             ↑
+             │   可能亚稳态    已稳定，给了一整个
+             │                周期 t_r 做解析</div>
+<pre><code>// 标准两级同步器 —— 整个项目应该只有这一份实现
+module cdc_sync_bit #(
+    parameter STAGES   = 2,
+    parameter RST_VAL  = 1'b0
+)(
+    input  wire clk_dst,     // 接收域时钟
+    input  wire rst_dst_n,   // 接收域复位（与 clk_dst 同域！）
+    input  wire din,         // 来自源域 FF 的 Q，不允许是组合逻辑
+    output wire dout
+);
+    (* ASYNC_REG = "TRUE" *)        // Xilinx/综合工具提示：禁止优化、就近摆放
+    reg [STAGES-1:0] sync_q;
+
+    always @(posedge clk_dst or negedge rst_dst_n) begin
+        if (!rst_dst_n) sync_q &lt;= {STAGES{RST_VAL}};
+        else            sync_q &lt;= {sync_q[STAGES-2:0], din};
+    end
+
+    assign dout = sync_q[STAGES-1];
+endmodule</code></pre>
+<table>
+<tr><th>要点</th><th>说明</th></tr>
+<tr><td>级数</td><td>默认 2 级。接收时钟 &gt; 1 GHz、或源跳变率极高时用 3 级</td></tr>
+<tr><td>复位</td><td>必须用<strong>接收域</strong>的复位。用源域复位就制造了 RDC（<a href="#10">§10</a>）</td></tr>
+<tr><td>两级之间</td><td>绝对不能有组合逻辑，否则吃掉 <code>t_r</code></td></tr>
+<tr><td>适用信号</td><td>只适用于<strong>电平型单 bit</strong>，且宽度足够（见 <a href="#2-2">§2.2</a>）</td></tr>
+<tr><td>物理实现</td><td>两级 FF 要就近摆放；工艺库有专用 <code>SYNC2</code> 单元时优先用</td></tr>
+</table>
+<div class="warn">
+<p><strong>两级同步器没有解决「数据丢失」。</strong>它只保证「采到的值是干净的」。慢→快时宽度天然足够所以没问题；快→慢时必须额外处理，见下面两节。</p>
+</div>
+
+<h3 id="4-2">4.2 快到慢：脉冲展宽与 Toggle 同步</h3>
+<h4>（a）脉冲展宽 stretcher</h4>
+<p>在源域把 1 拍的脉冲拉长到 N 拍，保证覆盖至少 2 个接收时钟沿。<strong>前提是知道频率比</strong>，适合频率比固定且已知的场合。</p>
+<pre><code>// 源域：把 1 拍脉冲展宽到 N 拍（N 由频率比决定，建议 ≥ 3 × ratio）
+reg [N-1:0] stretch;
+always @(posedge clk_src or negedge rst_src_n)
+    if (!rst_src_n) stretch &lt;= '0;
+    else            stretch &lt;= {stretch[N-2:0], pulse_in};
+
+wire wide_level = pulse_in | (|stretch);   // 加宽后的电平送去同步</code></pre>
+<div class="bad">
+<p>缺点：频率比写死在 RTL 里。一旦 SoC 支持动态变频（DVFS）或时钟可配置，<code>N</code> 就可能不够，变成偶发丢脉冲的硅上 bug。<strong>有变频需求时不要用这个方案。</strong></p>
+</div>
+
+<h4>（b）Toggle 同步（推荐）</h4>
+<p>把「脉冲」转成「电平翻转」：源域每来一个脉冲就翻转一次 toggle 寄存器，电平信号过同步器（宽度天然足够），接收域做边沿检测还原成脉冲。<strong>与频率比无关</strong>。</p>
+<div class="diagram">   clk_src 域                      clk_dst 域
+                  ┌─────────┐
+  pulse ──▶ toggle│         │  ┌──────┐  ┌──────┐  ┌──────┐
+         ┌──────┐ │  异步线  │  │ FF_1 │─▶│ FF_2 │─▶│ FF_3 │
+         │ T-FF │─┼─────────┼─▶└──────┘  └───┬──┘  └───┬──┘
+         └──────┘ │         │                │         │
+                  └─────────┘                └── XOR ──┴──▶ pulse_dst
+
+  电平每次翻转 = 一个事件；XOR 检测翻转沿 = 还原脉冲</div>
+<pre><code>// ---- 源域 ----
+reg tog;
+always @(posedge clk_src or negedge rst_src_n)
+    if (!rst_src_n) tog &lt;= 1'b0;
+    else if (pulse_src) tog &lt;= ~tog;      // 每个脉冲翻一次
+
+// ---- 接收域：三级（2 级同步 + 1 级做边沿检测的参考）----
+reg [2:0] tog_sync;
+always @(posedge clk_dst or negedge rst_dst_n)
+    if (!rst_dst_n) tog_sync &lt;= 3'b0;
+    else            tog_sync &lt;= {tog_sync[1:0], tog};
+
+wire pulse_dst = tog_sync[2] ^ tog_sync[1];   // 任一方向翻转都出一拍脉冲</code></pre>
+<div class="warn">
+<p><strong>Toggle 同步仍有吞吐限制</strong>：两个相邻脉冲的间隔必须 &gt; 接收域同步延迟（约 2~3 个 <code>clk_dst</code> 周期）。如果源域脉冲比这更密，toggle 会在同步完成前翻转两次，接收端只看到 0 次或 1 次事件 —— <strong>静默丢事件</strong>。这种场景必须用握手（§4.3）或 FIFO（§5.4）。</p>
+</div>
+
+<h3 id="4-3">4.3 快到慢：双向握手（无丢失）</h3>
+<p>唯一能<strong>保证零丢失且与频率比完全无关</strong>的单 bit 方案。代价是每次传输需要往返延迟。</p>
+<div class="diagram">  src 域                                    dst 域
+  ┌─────┐   req ──▶ [sync2] ──▶ ┌─────┐
+  │ FSM │                        │ FSM │
+  └─────┘ ◀── [sync2] ◀── ack    └─────┘
+
+  时序（两相握手）：
+    req  ___┌──────────────┐_______
+    ack  _________┌────────────┐___
+                  ↑            ↑
+            dst 收到并处理   src 看到 ack 后撤 req
+    往返开销 ≈ 2(同步延迟) ≈ 4~6 拍（取两域中较慢者为主）</div>
+<pre><code>// 源域握手 FSM（两相，req 撤销后才能发下一笔）
+localparam S_IDLE = 2'd0, S_REQ = 2'd1, S_WAIT_DEASSERT = 2'd2;
+reg [1:0] st;
+reg       req;
+wire      ack_sync;        // ack 经过 cdc_sync_bit 同步到 src 域
+
+always @(posedge clk_src or negedge rst_src_n) begin
+    if (!rst_src_n) begin st &lt;= S_IDLE; req &lt;= 1'b0; end
+    else case (st)
+        S_IDLE : if (start)      begin req &lt;= 1'b1; st &lt;= S_REQ; end
+        S_REQ  : if (ack_sync)   begin req &lt;= 1'b0; st &lt;= S_WAIT_DEASSERT; end
+        S_WAIT_DEASSERT:
+                 if (!ack_sync)  st &lt;= S_IDLE;     // 等 ack 回零，完成一次闭环
+        default: st &lt;= S_IDLE;
+    endcase
+end</code></pre>
+<p>握手的真正价值在多 bit 场景：<code>req</code> 有效期间数据总线被<strong>冻结</strong>，接收端在看到同步后的 <code>req</code> 时直接采总线即可，数据根本不需要过同步器（见 <a href="#5-2">§5.2</a>、<a href="#5-3">§5.3</a>）。</p>
+
+<h3 id="4-4">4.4 单 bit 方案选型表</h3>
+<table>
+<tr><th>方案</th><th>信号类型</th><th>频率方向</th><th>会丢事件？</th><th>延迟</th><th>面积</th><th>典型用途</th></tr>
+<tr><td>两级同步器</td><td>电平</td><td>慢→快，或宽度足够的快→慢</td><td>否（宽度足够时）</td><td>2 拍</td><td>极小</td><td>中断标志、状态位、使能</td></tr>
+<tr><td>脉冲展宽</td><td>脉冲</td><td>快→慢（比例已知固定）</td><td>比例变化时会丢</td><td>N + 2 拍</td><td>小</td><td>固定频率比的简单 SoC</td></tr>
+<tr><td>Toggle 同步</td><td>脉冲</td><td>任意</td><td>脉冲过密时会丢</td><td>3 拍</td><td>小</td><td>低频事件通知、计数脉冲</td></tr>
+<tr><td>双向握手</td><td>脉冲/事务</td><td>任意</td><td><strong>否</strong></td><td>4~6 拍</td><td>中</td><td>配置写入、低频命令</td></tr>
+</table>
+
+<h2 id="5">5. 多 bit 同步</h2>
+<p>核心原则（反复强调）：<strong>不要同步多 bit，要把多 bit 降维成单 bit 问题。</strong>四种方案分别对应四种降维思路。</p>
+
+<h3 id="5-1">5.1 格雷码：从编码上保证只变 1 位</h3>
+<p>格雷码相邻值只有一位不同。因此逐位同步时，最坏情况只有那一位处于亚稳态，接收端采到的要么是旧值要么是新值，<strong>都是合法值</strong>。</p>
+<div class="diagram">  二进制：  011 ──▶ 100     3 位同时变 → 可能采到 000/111/101（非法）
+  格雷码：  010 ──▶ 110     只有 1 位变 → 采到 010 或 110（都合法）
+
+  3 bit 格雷序列：000 001 011 010 110 111 101 100 (→回到 000)</div>
+<pre><code>// 二进制 ⇄ 格雷码转换（组合逻辑，一行）
+function automatic [W-1:0] bin2gray(input [W-1:0] b);
+    bin2gray = b ^ (b &gt;&gt; 1);
+endfunction
+
+function automatic [W-1:0] gray2bin(input [W-1:0] g);
+    integer i;
+    begin
+        gray2bin[W-1] = g[W-1];
+        for (i = W-2; i &gt;= 0; i = i - 1)
+            gray2bin[i] = gray2bin[i+1] ^ g[i];
+    end
+endfunction</code></pre>
+<div class="bad">
+<p><strong>格雷码的适用条件极其严格</strong>：源端数值必须<strong>每次只 ±1 单调递变</strong>。一旦出现跳变（如计数器被软件写入一个任意值、或清零 <code>ptr &lt;= 0</code>），就会多位同时翻转，格雷码保护完全失效。所以它基本只用在 <strong>FIFO 读写指针</strong>这一种场合。</p>
+</div>
+
+<h3 id="5-2">5.2 MUX 同步（数据冻结）—— 最常用也最省</h3>
+<p>思路：<strong>数据总线根本不过同步器</strong>，只同步一个单 bit 的「数据有效」使能。源端保证使能有效期间数据稳定，接收端用同步后的使能去打拍采数据。</p>
+<div class="diagram">   clk_src 域          │              clk_dst 域
+                       │
+  data_src[31:0] ──────┼───────────────────┐    (异步线，不过同步器)
+    (使能有效期间必须稳定)                  │
+                       │                   ▼
+  valid_src ──[FF]─────┼─▶[sync2]─▶ valid_dst ─ EN ─▶ ┌──────────┐
+                       │                              │ data_dst │
+                       │                              └──────────┘
+   数据在 valid 之前就已稳定，同步延迟（2 拍）天然成了建立时间余量</div>
+<pre><code>// ---- 源域：先摆好数据，再抬 valid；valid 期间不许改数据 ----
+always @(posedge clk_src or negedge rst_src_n)
+    if (!rst_src_n)       begin data_src &lt;= '0; valid_src &lt;= 1'b0; end
+    else if (load &amp;&amp; !valid_src) begin
+        data_src  &lt;= new_data;    // 数据先于 valid 一拍稳定
+        valid_src &lt;= 1'b1;
+    end
+    else if (done_sync)   valid_src &lt;= 1'b0;
+
+// ---- 接收域：只同步 valid，用它当使能采数据 ----
+cdc_sync_bit u_v (.clk_dst(clk_dst), .rst_dst_n(rst_dst_n),
+                  .din(valid_src), .dout(valid_dst));
+
+reg valid_dst_d;
+always @(posedge clk_dst or negedge rst_dst_n) begin
+    if (!rst_dst_n) begin valid_dst_d &lt;= 1'b0; end
+    else begin
+        valid_dst_d &lt;= valid_dst;
+        if (valid_dst &amp;&amp; !valid_dst_d)   // 上升沿：此刻 data_src 已稳定 ≥2 拍
+            data_dst &lt;= data_src;
+    end
+end</code></pre>
+<div class="good">
+<p><strong>为什么安全</strong>：<code>valid</code> 经过 2 级同步，接收端看到它时，<code>data_src</code> 已经稳定了至少 2 个 <code>clk_dst</code> 周期。同步延迟本身就是数据的建立时间保证。面积开销只有 2 个 FF（而不是 2×32），这也是它被广泛使用的原因。</p>
+<p>约束上需要配合 <code>set_max_delay -datapath_only</code> 限制数据线延迟，确保它不会比 valid 路径慢太多（见 <a href="#12-2">§12.2</a>）。</p>
+</div>
+
+<h3 id="5-3">5.3 握手：MUX 同步 + 闭环确认</h3>
+<p>MUX 同步的升级版，加上 <code>ack</code> 回路，源端确切知道数据已被接收，才能发下一笔。适合低频、必须保证每笔都到的场合（如 APB 配置写入跨域）。</p>
+<table>
+<tr><th>握手类型</th><th>流程</th><th>吞吐</th><th>特点</th></tr>
+<tr><td>两相（2-phase）</td><td>req↑ → ack↑ → req↓ → ack↓</td><td>每笔 ≈ 4~6 拍</td><td>信号全回零，状态明确，最常用</td></tr>
+<tr><td>四相 / 全回零</td><td>同上但两边都显式等待对方回零</td><td>更低</td><td>最稳健，不依赖任何时序假设</td></tr>
+<tr><td>两边沿（2-edge）</td><td>req/ack 用翻转表示事件，不回零</td><td>约快 2×</td><td>省一半延迟，但状态机更易写错</td></tr>
+</table>
+
+<h3 id="5-4">5.4 异步 FIFO：高吞吐的标准答案</h3>
+<p>需要<strong>连续流式</strong>传输时唯一可行的方案。原理：双口 RAM + 两个指针，指针用格雷码跨域同步。</p>
+<div class="diagram">            ┌───────────────────────────┐
+  wdata ───▶│   Dual-Port RAM (深度 2^N)  │───▶ rdata
+            └───────────────────────────┘
+  wclk 域                                        rclk 域
+  ┌──────────┐                            ┌──────────┐
+  │ wptr_bin │──bin2gray──▶ wptr_gray ────┼─▶[sync2]─┼─▶ wptr_g_r
+  │   +1     │                            │           │     │
+  └──────────┘                            │           │     ▼
+       ▲                                  │        比较 → empty
+       │                                  │
+    full ◀── 比较 ◀── rptr_g_w ◀─[sync2]◀─┼── rptr_gray ◀──bin2gray── rptr_bin
+            │                             │                              +1
+  (写域看到的读指针是"偏老"的 → full 判断偏保守 → 安全)</div>
+<table>
+<tr><th>实现要点</th><th>原因</th></tr>
+<tr><td>指针宽度 = <code>log2(DEPTH) + 1</code></td><td>多一位用于区分「满」和「空」（指针全等 = 空；最高位不同、其余相同 = 满）</td></tr>
+<tr><td>指针必须用格雷码跨域</td><td>二进制指针多位同时翻转会同步出非法值，导致假空/假满</td></tr>
+<tr><td>深度必须是 2 的幂</td><td>非 2 的幂时格雷码回绕不再保证单 bit 变化</td></tr>
+<tr><td>full 在写域算，empty 在读域算</td><td>各自用「同步过来的偏老的对端指针」，判断天然偏保守——宁可假满/假空，绝不溢出</td></tr>
+<tr><td>RAM 输出不需要同步</td><td>读指针稳定后地址才稳定，数据路径由 <code>set_max_delay</code> 保证</td></tr>
+<tr><td>两域复位要协调</td><td>只复位一侧会导致指针永久错位，必须两域都复位或做 RDC 处理（<a href="#10">§10</a>）</td></tr>
+</table>
+<div class="warn">
+<p><strong>「偏保守」是异步 FIFO 安全性的核心</strong>。写域看到的 <code>rptr</code> 总是滞后真实值 2~3 拍，意味着写域认为的「剩余空间」比实际更少 → 可能提前报 full（性能损失），但<strong>绝不会溢出</strong>（功能正确）。读域同理。设计时如果试图"优化"掉这个滞后，就会引入真 bug。</p>
+</div>
+
+<h3 id="5-5">5.5 多 bit 方案选型表</h3>
+<table>
+<tr><th>方案</th><th>数据是否过同步器</th><th>吞吐</th><th>延迟</th><th>面积</th><th>限制 / 适用</th></tr>
+<tr><td>格雷码</td><td>是（但只变 1 位）</td><td>每拍</td><td>2 拍</td><td>小（+转换逻辑）</td><td><strong>只能用于 ±1 递变</strong>，即 FIFO 指针</td></tr>
+<tr><td>MUX 同步</td><td><strong>否</strong>（只同步 valid）</td><td>低（需间隔）</td><td>2~3 拍</td><td><strong>最小</strong></td><td>源端能保证数据冻结；无需反压</td></tr>
+<tr><td>握手</td><td>否</td><td>低（4~6 拍/笔）</td><td>4~6 拍</td><td>中</td><td>需要确认机制，配置/命令通道</td></tr>
+<tr><td>异步 FIFO</td><td>否（指针用格雷码）</td><td><strong>接近每拍</strong></td><td>3~4 拍 + 排队</td><td><strong>大</strong>（RAM）</td><td>流式数据，需要缓冲与反压</td></tr>
+</table>
+
+<h2 id="6">6. 选型决策流程</h2>
+<div class="diagram">                    这个 CDC 信号是几位？
+                              │
+          ┌───────────────────┴───────────────────┐
+       1 bit                                   N bit
+          │                                       │
+   是电平还是脉冲？                       源端数值如何变化？
+          │                                       │
+   ┌──────┴──────┐                 ┌──────────────┼──────────────┐
+ 电平           脉冲            只 ±1 递变      可任意跳变       流式连续
+   │              │                  │              │              │
+慢→快?         需要零丢失?         格雷码      能保证冻结?      异步 FIFO
+   │              │               (§5.1)           │            (§5.4)
+┌──┴──┐       ┌───┴───┐                      ┌─────┴─────┐
+是    否       是      否                     能          不能
+│     │        │       │                      │            │
+两级  保证宽度  握手   Toggle              MUX 同步      握手/FIFO
+同步器 ≥2T_slow (§4.3) (§4.2)              (§5.2)       (§5.3/5.4)
+(§4.1) 或改脉冲方案</div>
+<div class="note">
+<p>实践中的简化记法：<strong>控制位 → 两级同步器；事件 → toggle；配置 → MUX 同步或握手；数据流 → 异步 FIFO。</strong>遇到不属于这四类的，先怀疑是不是接口划分有问题，而不是去发明新同步器。</p>
+</div>
+
+<div class="part" id="P3">
+<div class="pn">第 三 部 分</div>
+<h2>设计如何保证 CDC 实现与功能正确</h2>
+<p class="pd">CDC 不是「写对一个模块」的问题，而是「让整个项目不可能写错」的工程问题。核心手段是结构化规则 + 库化封装，把正确性从「靠人细心」转移到「靠流程和工具」。</p>
+</div>
+
+<h2 id="7">7. 结构化设计规则</h2>
+<p>工业界通行的做法：<strong>禁止在业务 RTL 里手写同步逻辑</strong>，所有跨域必须通过受控的公共单元。</p>
+<table>
+<tr><th>#</th><th>规则</th><th>为什么</th></tr>
+<tr><td>R1</td><td>所有同步器封装成项目级公共模块（<code>cdc_sync_bit</code> / <code>cdc_handshake</code> / <code>cdc_async_fifo</code>），业务代码只能实例化，不能自己写 <code>always</code> 做同步</td><td>把 N 处可能写错收敛成 1 处经过充分验证的实现；CDC 工具也能按模块名批量识别</td></tr>
+<tr><td>R2</td><td>命名规范强制体现时钟域，例如 <code>sig_aclk</code> / <code>sig_pclk</code>，同步器实例统一 <code>u_cdc_*</code></td><td>Code review 时肉眼就能发现「两个不同后缀的信号出现在同一个表达式里」</td></tr>
+<tr><td>R3</td><td>跨域只发生在<strong>模块边界</strong>，内部逻辑严格单时钟</td><td>每个模块只有一个时钟 → 层次化 STA 和 CDC 分析都简单；跨域集中在一层专门的 <code>*_cdc_wrap</code></td></tr>
+<tr><td>R4</td><td>一个源信号只允许存在<strong>一条</strong>同步路径</td><td>避免重汇聚（<a href="#2-4">§2.4</a>）。需要多处使用时，同步一次后在接收域扇出</td></tr>
+<tr><td>R5</td><td>同步器的输入必须是源域 FF 的 Q，不能是组合逻辑输出</td><td>组合毛刺会被随机采成假事件，仿真难复现</td></tr>
+<tr><td>R6</td><td>同步器的复位必须用<strong>接收域</strong>复位</td><td>用源域复位 = 制造 RDC（<a href="#10">§10</a>）</td></tr>
+<tr><td>R7</td><td>多 bit 跨域必须说明采用的降维机制，并在代码注释中声明前提条件（如「valid 有效期间 data 冻结」）</td><td>前提条件是验证和 CDC 工具 waiver 的依据，不写清楚后人必然破坏它</td></tr>
+<tr><td>R8</td><td>时钟域清单（Clock Domain Spec）作为设计文档的一部分：列出所有时钟、频率范围、域间关系（同步/异步）、所有合法 crossing</td><td>这是 SDC 的 <code>clock_groups</code> 和 CDC 工具 SGDC 的唯一来源；没有它，约束就是猜的</td></tr>
+</table>
+<div class="good">
+<p><strong>R1 + R3 是最有价值的两条</strong>。做到这两条，CDC 工具的报告量通常能下降一个数量级，剩下的告警才有人力逐条看。反之，如果同步逻辑散落在几百个模块里，工具会报出上万条，团队只能全部 waive，等于没做 CDC 检查。</p>
+</div>
+
+<h2 id="8">8. 同步器前后的禁忌</h2>
+<div class="bad">
+<p><strong>禁忌 1：同步器输入接组合逻辑</strong></p>
+</div>
+<pre><code>// 错误：组合逻辑毛刺会被随机采样
+wire req = (state == ST_DONE) &amp;&amp; !busy &amp;&amp; cnt_zero;
+cdc_sync_bit u_bad (.din(req), ...);          // ✗
+
+// 正确：先在源域打一拍
+reg req_q;
+always @(posedge clk_src or negedge rst_src_n)
+    if (!rst_src_n) req_q &lt;= 1'b0;
+    else            req_q &lt;= (state == ST_DONE) &amp;&amp; !busy &amp;&amp; cnt_zero;
+cdc_sync_bit u_ok (.din(req_q), ...);         // ✓</code></pre>
+
+<div class="bad">
+<p><strong>禁忌 2：同步器两级之间插逻辑</strong></p>
+</div>
+<pre><code>// 错误：中间插了门，吃掉解析时间 t_r，MTBF 指数恶化
+always @(posedge clk_dst) begin
+    s1 &lt;= din;
+    s2 &lt;= s1 &amp; enable;     // ✗ 这里不能有任何逻辑
+end
+
+// 正确：纯移位，要用 enable 就在 s2 之后用
+always @(posedge clk_dst) begin
+    s1 &lt;= din;
+    s2 &lt;= s1;              // ✓
+end
+wire out = s2 &amp; enable;</code></pre>
+
+<div class="bad">
+<p><strong>禁忌 3：同一源信号走两条同步路径（重汇聚）</strong></p>
+</div>
+<pre><code>// 错误：两套同步器可能错位一拍，AND 出源端不存在的组合
+cdc_sync_bit u_s1 (.din(src_flag), .dout(f_a));
+cdc_sync_bit u_s2 (.din(src_flag), .dout(f_b));   // ✗
+wire use_it = f_a &amp; some_logic(f_b);
+
+// 正确：只同步一次，接收域扇出
+cdc_sync_bit u_s  (.din(src_flag), .dout(flag_dst));  // ✓
+// flag_dst 在接收域随便用多少次都安全</code></pre>
+
+<div class="bad">
+<p><strong>禁忌 4：对多 bit 总线逐位同步后直接使用</strong></p>
+</div>
+<pre><code>// 错误：经典的多 bit 不一致 bug
+genvar i;
+for (i = 0; i &lt; 32; i = i + 1)
+    cdc_sync_bit u_s (.din(data_src[i]), .dout(data_dst[i]));   // ✗
+// data_dst 会出现源端从未存在的中间值
+
+// 正确：用 §5.2 的 MUX 同步，或 §5.4 的异步 FIFO</code></pre>
+
+<div class="bad">
+<p><strong>禁忌 5：对 CDC 路径简单打 <code>set_false_path</code> 就算完</strong></p>
+<p><code>false_path</code> 告诉工具「别管这条路」，于是布线延迟完全失控。单 bit 还勉强（只影响 <code>t_r</code>），多 bit MUX 同步场景会致命：数据线延迟若远大于 valid 线，接收端采 valid 时数据还没到。必须用 <code>set_max_delay -datapath_only</code>（<a href="#12-2">§12.2</a>）。</p>
+</div>
+
+<h2 id="9">9. 异步 FIFO 实现要点（逐条核对）</h2>
+<p>异步 FIFO 是最容易「看起来对、实际有 bug」的模块，建议按下表逐项自检。</p>
+<pre><code>// 关键片段：指针与满空判断
+localparam AW = 4;                        // 深度 16，必须是 2 的幂
+reg [AW:0] wbin, rbin;                    // 宽度 = AW+1，多一位区分满/空
+
+wire [AW:0] wgray = wbin ^ (wbin &gt;&gt; 1);
+wire [AW:0] rgray = rbin ^ (rbin &gt;&gt; 1);
+
+// 写域：同步读指针（格雷码，逐位同步是安全的）
+reg [AW:0] rgray_s1, rgray_s2;
+always @(posedge wclk or negedge wrst_n)
+    if (!wrst_n) {rgray_s2, rgray_s1} &lt;= '0;
+    else         {rgray_s2, rgray_s1} &lt;= {rgray_s1, rgray};
+
+// 满：最高位不同，次高位不同，其余相同
+wire full  = (wgray == {~rgray_s2[AW:AW-1], rgray_s2[AW-2:0]});
+
+// 读域：同步写指针后判空（完全相等即为空）
+reg [AW:0] wgray_s1, wgray_s2;
+always @(posedge rclk or negedge rrst_n)
+    if (!rrst_n) {wgray_s2, wgray_s1} &lt;= '0;
+    else         {wgray_s2, wgray_s1} &lt;= {wgray_s1, wgray};
+
+wire empty = (rgray == wgray_s2);</code></pre>
+<table>
+<tr><th>自检项</th><th>常见错误</th></tr>
+<tr><td>指针宽度是否 AW+1</td><td>用 AW 位 → 满和空都表现为「指针相等」，无法区分</td></tr>
+<tr><td>满的判断式是否取反了<strong>两位</strong></td><td>只取反最高位是错的（格雷码的回绕特性决定了要反两位）</td></tr>
+<tr><td>深度是否 2 的幂</td><td>非 2 的幂时格雷码回绕处会多位跳变</td></tr>
+<tr><td>full/empty 各自在哪个域算</td><td>在对方域算会引入新的多 bit 跨域</td></tr>
+<tr><td>两域复位是否都做了</td><td>只复位一侧 → 指针永久错位，FIFO 一开机就是假满或假空</td></tr>
+<tr><td>RAM 的写使能是否 <code>wen &amp;&amp; !full</code></td><td>漏掉 full 保护 → 溢出覆盖未读数据</td></tr>
+<tr><td>是否误把 <code>almost_full</code> 等水位线也做成跨域</td><td>水位线应在本域用本域指针 + 同步过来的对端指针计算</td></tr>
+</table>
+<div class="note">
+<p>强烈建议：异步 FIFO 不要自己写，用<strong>经过硅验证的公共 IP</strong>（公司 IP 库 / 代工厂提供 / 成熟开源实现），并配套它自带的 SVA 断言和形式验证脚本。自写异步 FIFO 的 bug 往往只在特定频率比下偶发，仿真跑不出来。</p>
+</div>
+
+<h2 id="10">10. 复位域交叉 RDC</h2>
+<p>CDC 的「孪生问题」。两个 FF 由同一时钟驱动，但复位信号来自不同（异步）复位源：复位撤离时刻不同，发送端已退出复位开始输出，接收端还在复位中（或反之），可能采到不期望的值甚至亚稳态。</p>
+<div class="diagram">  rst_a_n ──▶┌──────┐              ┌──────┐◀── rst_b_n   (两个独立复位源)
+             │ FF_A │── data ─────▶│ FF_B │
+             └───▲──┘              └───▲──┘
+               clk                   clk              ← 同一个时钟！
+
+  rst_a_n 已释放、rst_b_n 还在断言中 → FF_B 的 D 口数据在变，
+  但 FF_B 被异步复位压着；若 rst_b_n 恰在此刻释放 → recovery 违例/亚稳态。
+  STA 不会报（同时钟同步路径），CDC 工具的 CDC 检查也不一定报，
+  必须专门跑 RDC 检查。</div>
+<table>
+<tr><th>处理手段</th><th>说明</th></tr>
+<tr><td>复位域合并</td><td>能合并就合并，最省事。同一功能块尽量只有一个复位</td></tr>
+<tr><td>复位撤离排序</td><td>由复位控制器保证：接收端先退出复位，再放开发送端（或两者同时）</td></tr>
+<tr><td>接收端数据隔离</td><td>在复位期间用同步器/使能把接收端 D 口钉在安全值</td></tr>
+<tr><td>同步器复位统一</td><td>同步器只用接收域复位（规则 R6），从源头减少 RDC</td></tr>
+<tr><td>工具检查</td><td>CDC 工具一般都带 RDC 模式，需要在 SGDC 里声明复位信号与复位域</td></tr>
+</table>
+<div class="warn">
+<p>RDC 极易被漏掉，因为它<strong>既不被 STA 覆盖</strong>（同时钟路径，STA 认为是普通 setup/hold），<strong>也不被默认 CDC 检查覆盖</strong>（需要单独开 RDC 分析并正确声明复位）。流程里必须有显式的 RDC 签核项。</p>
+</div>
+
+<h2 id="11">11. 典型 Bug 清单</h2>
+<table>
+<tr><th>#</th><th>现象</th><th>根因</th><th>修法</th></tr>
+<tr><td>1</td><td>偶发丢中断 / 事件计数少</td><td>快→慢的 1 拍脉冲被跳过（<a href="#2-2">§2.2</a>）</td><td>改 toggle 同步或握手</td></tr>
+<tr><td>2</td><td>读到的配置值是两次配置的混合</td><td>多 bit 逐位同步（<a href="#2-3">§2.3</a>）</td><td>MUX 同步 / 握手</td></tr>
+<tr><td>3</td><td>FIFO 偶发溢出或丢数</td><td>指针用二进制跨域；或满判断式写错</td><td>格雷码 + 核对 <a href="#9">§9</a> 自检表</td></tr>
+<tr><td>4</td><td>状态机偶发进入非法态</td><td>状态编码多 bit 跨域；或重汇聚</td><td>状态不跨域，只跨「请求/完成」单 bit</td></tr>
+<tr><td>5</td><td>DVFS 降频后功能异常</td><td>脉冲展宽的 N 值按旧频率比写死</td><td>改与频率无关的 toggle/握手</td></tr>
+<tr><td>6</td><td>只在某几颗芯片上出错、温度相关</td><td>MTBF 不足（同步器被优化掉 / <code>t_r</code> 被布线吃掉）</td><td>检查 <code>set_size_only</code> 与 <code>max_delay</code></td></tr>
+<tr><td>7</td><td>复位后首次访问失败，之后正常</td><td>RDC（<a href="#10">§10</a>）</td><td>复位撤离排序 / 复位域合并</td></tr>
+<tr><td>8</td><td>RTL 仿真全过，门级或硅上出错</td><td>RTL 仿真默认零延迟，掩盖了亚稳态和采样竞争</td><td>亚稳态注入仿真（<a href="#15-2">§15.2</a>）</td></tr>
+<tr><td>9</td><td>时钟被门控后信号永久卡住</td><td>握手的 ack 等不到（对端时钟停了）</td><td>握手要有超时或在停钟前保证空闲</td></tr>
+<tr><td>10</td><td>同步后的使能宽度不对，下游重复执行</td><td>慢→快同步后电平持续多拍，下游按电平触发</td><td>接收域做边沿检测，只认一拍</td></tr>
+</table>
+
+<div class="part" id="P4">
+<div class="pn">第 四 部 分</div>
+<h2>约束与 CDC 工具</h2>
+<p class="pd">CDC 的「约束」有两套且不能互相替代：一套给 STA（SDC，决定物理实现质量），一套给 CDC 检查工具（SGDC/TCL，决定能不能查出结构错误）。</p>
+</div>
+
+<h2 id="12">12. SDC 侧约束</h2>
+<p>SDC 对 CDC 做的事有两件：<strong>（a）告诉 STA 这些时钟之间不要做跨域 setup/hold 检查；（b）但仍然要限制跨域线的延迟。</strong>很多人只做了 (a)，这是 CDC 相关硅上问题的常见来源。</p>
+
+<h3 id="12-1">12.1 声明异步关系：set_clock_groups</h3>
+<pre><code># 推荐：声明异步时钟组。工具会自动排除组间所有路径的 setup/hold 检查
+set_clock_groups -asynchronous \
+    -group {clk_core clk_core_div2} \
+    -group {clk_usb} \
+    -group {clk_rtc}
+
+# 同一组内的时钟仍然互相做正常时序检查（它们同源同步）</code></pre>
+<table>
+<tr><th>命令</th><th>语义</th><th>何时用</th></tr>
+<tr><td><code>set_clock_groups -asynchronous</code></td><td>组间双向排除检查，且表明"真异步"</td><td><strong>首选</strong>，表达异步关系最准确</td></tr>
+<tr><td><code>set_clock_groups -logically_exclusive</code></td><td>逻辑上不会同时活跃（如 MUX 选择的两个时钟）</td><td>时钟多路选择；注意仍可能需要考虑串扰</td></tr>
+<tr><td><code>set_clock_groups -physically_exclusive</code></td><td>物理上不可能同时存在（同一 pin 上的两种模式）</td><td>多模式分析</td></tr>
+<tr><td><code>set_false_path -from A -to B</code></td><td>单向排除指定路径</td><td>颗粒度更细时用；不如 clock_groups 表达清楚</td></tr>
+</table>
+<div class="warn">
+<p><code>set_clock_groups</code> 是<strong>覆盖式</strong>的：同一个时钟出现在多条 <code>set_clock_groups</code> 命令里，后面的可能覆盖前面的（取决于工具版本）。最佳实践是<strong>只写一条</strong> <code>set_clock_groups -asynchronous</code>，把所有组一次列全。</p>
+</div>
+
+<h3 id="12-2">12.2 关键：set_max_delay -datapath_only</h3>
+<p>排除了 setup/hold 检查后，工具对这条线<strong>没有任何延迟目标</strong>，布线可能绕得很长。后果：</p>
+<ul>
+<li>单 bit 同步器：源 FF 到第一级 FF 的线延迟大 → 不直接影响 MTBF，但 <strong>第一级到第二级</strong>之间若被绕远，<code>t_r</code> 被吃掉，MTBF 指数恶化</li>
+<li>MUX 同步（多 bit）：数据线延迟 ≫ valid 线延迟 → 接收端按 valid 采样时数据还没稳定，<strong>功能直接错</strong></li>
+<li>长线还会带来更大的串扰和 skew 不确定性</li>
+</ul>
+<pre><code># 对所有跨域路径给一个延迟上限（典型取接收时钟 1 个周期，或更紧）
+set_max_delay 2.0 -datapath_only \
+    -from [get_clocks clk_core] -to [get_clocks clk_usb]
+
+set_max_delay 2.0 -datapath_only \
+    -from [get_clocks clk_usb]  -to [get_clocks clk_core]
+
+# -datapath_only 的含义：只约束数据路径延迟，忽略时钟路径延迟和时钟不确定性
+#   → 正是跨异步域想要的语义（时钟关系本来就无意义）
+# 注意：-datapath_only 只能配 set_max_delay，不能配 set_min_delay</code></pre>
+<div class="good">
+<p><strong>标准组合拳</strong>：<code>set_clock_groups -asynchronous</code>（去掉无意义的检查）+ <code>set_max_delay -datapath_only</code>（保住物理实现质量）。只写前者是半成品。</p>
+</div>
+
+<h3 id="12-3">12.3 保护同步器不被优化掉</h3>
+<p>综合和 PnR 工具可能对同步器做出破坏性"优化"：把两级 FF 合并、把第一级替换成扫描链上的共享 FF、或者在两级间插 buffer。</p>
+<pre><code># 允许改驱动强度（修 transition/hold），但不许改结构、不许合并
+set_size_only -all_instances [get_cells -hier *u_cdc_sync*/sync_q_reg*]
+
+# 禁止跨同步器做 retiming / 寄存器合并
+set_dont_retime  [get_cells -hier *u_cdc_sync*]
+
+# 层次边界保留，便于后续识别与检查
+set_dont_touch [get_cells -hier -filter "ref_name =~ cdc_sync_bit*"] false
+# ↑ 注意：整体 dont_touch 会导致无法修 transition，MTBF 反而变差，
+#   所以优先用 set_size_only，而不是 set_dont_touch</code></pre>
+<table>
+<tr><th>命令</th><th>效果</th><th>建议</th></tr>
+<tr><td><code>set_size_only</code></td><td>只允许换不同驱动强度的同功能单元</td><td><strong>推荐</strong>。既防结构破坏，又能修 transition</td></tr>
+<tr><td><code>set_dont_touch</code></td><td>完全冻结</td><td>慎用。会导致 transition 超标，MTBF 变差</td></tr>
+<tr><td><code>ASYNC_REG</code> 属性（RTL 中）</td><td>提示工具这是同步器，就近摆放、禁止优化</td><td>FPGA 流程必加；ASIC 流程视工具支持情况</td></tr>
+<tr><td>专用同步器库单元</td><td>工艺库提供的 <code>SYNC2</code>，<code>T_w</code> 更小</td><td>有就用，MTBF 直接改善</td></tr>
+</table>
+<div class="note">
+<p>物理实现上还要补一条：<strong>同步器两级 FF 必须就近摆放</strong>。实践中用 <code>create_bound</code> / region 约束，或者直接用库里的双级同步器硬单元。</p>
+</div>
+
+<h2 id="13">13. CDC 工具与流程</h2>
+<p>SDC 解决的是「物理实现别拖后腿」，<strong>它完全不检查 CDC 结构对不对</strong>。结构正确性必须靠专门的 CDC 工具。</p>
+
+<h3 id="13-1">13.1 三类检查引擎</h3>
+<p>主流工具（Synopsys SpyGlass CDC / VC SpyGlass、Cadence Jasper CDC / Conformal、Siemens Questa CDC、Real Intent Meridian CDC）内部都是这三个引擎的组合：</p>
+<table>
+<tr><th>引擎</th><th>做什么</th><th>能发现</th><th>局限</th></tr>
+<tr><td><strong>结构检查</strong><br>（Structural / Static）</td><td>遍历网表，识别所有 crossing，匹配已知同步器模式</td><td>缺同步器、多 bit 逐位同步、重汇聚、同步器前有组合逻辑、同步器内插逻辑</td><td>只看结构不看功能，误报多（需要 waiver）；无法判断"协议用得对不对"</td></tr>
+<tr><td><strong>形式检查</strong><br>（Formal / Protocol）</td><td>自动生成同步协议断言并用形式方法证明</td><td>握手协议违例、数据在 valid 期间变化、格雷码多位跳变、FIFO 溢出</td><td>状态空间爆炸，需要合理切块和假设；需要正确的约束</td></tr>
+<tr><td><strong>动态检查</strong><br>（Dynamic / Metastability Injection）</td><td>在仿真中给 CDC 路径注入随机抖动/延迟，模拟亚稳态</td><td>对亚稳态不鲁棒的功能逻辑、仅在特定频率比下暴露的 bug</td><td>依赖激励覆盖率；跑得慢</td></tr>
+</table>
+<div class="note">
+<p>三者不能互相替代。典型流程是：<strong>结构检查清零 → 形式检查证明协议 → 动态注入在回归里跑</strong>。只做结构检查的项目，仍可能因为"同步器结构对但协议用错"而出问题（例如握手状态机写错、valid 期间数据变化）。</p>
+</div>
+
+<h3 id="13-2">13.2 SGDC / 工具约束</h3>
+<p>CDC 工具需要一份自己的约束（SpyGlass 叫 SGDC，其他工具是 TCL），内容和 SDC 不同——它关心的是<strong>逻辑意图</strong>而不是时序数值。</p>
+<pre><code># ---- 时钟与复位声明（最基础，写错则全部分析无效）----
+current_design top
+clock -name "clk_core" -domain d_core -period 2.0
+clock -name "clk_usb"  -domain d_usb  -period 20.83
+clock -name "clk_rtc"  -domain d_rtc  -period 30517
+
+reset -name "rst_core_n" -value 0
+reset -name "rst_usb_n"  -value 0
+
+# ---- 声明已知的同步器模块，让工具识别而不是报错 ----
+sync_cell -name cdc_sync_bit
+sync_cell -name cdc_sync_pulse
+
+# ---- 声明数据冻结假设（MUX 同步的前提，§5.2）----
+# 告诉工具：data_src 在 valid_src 有效期间是稳定的
+qualifier -name valid_src -crossing data_src
+
+# ---- 声明确实无需同步的静态信号 ----
+# 只在复位后配置、运行时不变的信号
+quasi_static -name cfg_mode[*]
+
+# ---- 不需要分析的时钟组合 ----
+cdc_false_path -from clk_scan -to clk_core      # scan 模式不分析</code></pre>
+<table>
+<tr><th>约束</th><th>作用</th><th>风险</th></tr>
+<tr><td><code>clock</code> / <code>reset</code></td><td>定义时钟域与复位，是一切分析的基础</td><td>漏声明一个时钟 → 该域所有 crossing 都不被分析，<strong>静默漏检</strong></td></tr>
+<tr><td><code>sync_cell</code></td><td>注册自定义同步器，工具识别后不报错</td><td>随便注册未经验证的模块 = 自己给自己开后门</td></tr>
+<tr><td><code>qualifier</code></td><td>声明「这个使能保证了那组数据稳定」</td><td><strong>最危险</strong>的约束。声明错了，工具就不报多 bit 错误了，必须用 SVA 独立验证这个假设（<a href="#16">§16</a>）</td></tr>
+<tr><td><code>quasi_static</code></td><td>声明静态/准静态信号无需同步</td><td>若该信号运行时其实会变，等于放过一个真 bug</td></tr>
+<tr><td><code>cdc_false_path</code></td><td>排除不关心的域间组合</td><td>同 SDC 的 false_path，容易滥用</td></tr>
+</table>
+<div class="bad">
+<p><strong><code>qualifier</code> 和 <code>quasi_static</code> 是「用假设换报告干净」的交易。</strong>每一条都必须有对应的 SVA 断言在仿真/形式验证中独立证明，否则就是把真 bug 伪装成了合规。Review 时应重点审这两类约束，而不是看报告有多干净。</p>
+</div>
+
+<h3 id="13-3">13.3 Waiver 管理</h3>
+<p>CDC 项目失败最常见的方式不是"没跑工具"，而是<strong>waiver 失控</strong>：首次运行报出几千条，团队为了出报告批量 waive，真问题就埋在里面。</p>
+<table>
+<tr><th>规则</th><th>说明</th></tr>
+<tr><td>每条 waiver 必须有<strong>署名 + 日期 + 理由</strong></td><td>「这条是误报」不是理由。要写清为什么结构上安全</td></tr>
+<tr><td>禁止通配符批量 waive 整类规则</td><td><code>waive -rule Ac_unsync01</code> 等于关掉检查</td></tr>
+<tr><td>waiver 文件入版本控制，变更要 review</td><td>和 RTL 同等对待</td></tr>
+<tr><td>每次 RTL 大改后复查 waiver 是否仍成立</td><td>waiver 基于当时的结构，结构改了假设可能失效</td></tr>
+<tr><td>统计并公示 waiver 数量趋势</td><td>只增不减说明流程在恶化</td></tr>
+<tr><td>区分「真误报」和「基于设计假设」</td><td>后者必须链接到对应的 SVA / 验证项</td></tr>
+</table>
+
+<h3 id="13-4">13.4 签核流程</h3>
+<div class="diagram">  阶段 1：早期（模块级，RTL 刚成型）
+    ├─ 跑结构检查，按模块逐个清零
+    ├─ 此时改 RTL 成本最低
+    └─ 产出：时钟域清单 + 初版 SGDC
+
+  阶段 2：集成（子系统/全芯片）
+    ├─ 结构检查（含 RDC）零 error
+    ├─ 形式检查证明所有握手/FIFO 协议
+    ├─ 所有 qualifier / quasi_static 有对应 SVA
+    └─ waiver 逐条 review 签字
+
+  阶段 3：回归（持续）
+    ├─ CDC 检查进 CI，RTL 每次提交自动跑
+    ├─ 亚稳态注入仿真进夜间回归
+    └─ 门级网表再跑一次 CDC（确认综合没破坏同步器）
+
+  阶段 4：Tapeout 签核
+    ├─ CDC 报告零 error，warning 全部有结论
+    ├─ SDC 中 clock_groups 与时钟域清单一致性检查
+    ├─ report_exceptions -ignored 确认约束未静默失效
+    └─ RDC 单独签核</div>
+<div class="warn">
+<p><strong>阶段 3 的"门级网表再跑一次"经常被省略，但很关键</strong>：综合/PnR 可能把同步器优化掉、把两级 FF 合并、或在两级间插了 buffer。只在 RTL 上跑 CDC 无法发现这类问题。对照检查 <a href="#12-3">§12.3</a> 的保护约束是否真的生效。</p>
+</div>
+
+<div class="part" id="P5">
+<div class="pn">第 五 部 分</div>
+<h2>验证：怎么验 CDC</h2>
+<p class="pd">CDC 验证的最大困难：<strong>普通 RTL 仿真天然验不出 CDC 问题</strong>。因为仿真器用零延迟理想模型，每次采样结果都确定，掩盖了硅上真实存在的随机性。必须用专门手段人为引入这种随机性。</p>
+</div>
+
+<h2 id="14">14. 验证的四层防线</h2>
+<table>
+<tr><th>层</th><th>手段</th><th>能证明什么</th><th>验不出什么</th></tr>
+<tr><td>1</td><td><strong>静态结构检查</strong>（CDC 工具）</td><td>所有 crossing 都有正确结构的同步器</td><td>同步协议用得对不对；功能是否正确</td></tr>
+<tr><td>2</td><td><strong>SVA 断言</strong>（仿真 + 形式）</td><td>同步协议的前提条件成立（数据冻结、格雷码单位变化、握手序列）</td><td>没被激励覆盖到的场景</td></tr>
+<tr><td>3</td><td><strong>亚稳态注入仿真</strong></td><td>功能逻辑对同步器输出的 ±1 拍不确定性是鲁棒的</td><td>极低概率事件；依赖随机种子数量（展开分析见 <a href="#15-3">§15.3</a>）</td></tr>
+<tr><td>4</td><td><strong>形式验证</strong></td><td>在所有可能的时钟相位关系下协议都成立（穷尽）</td><td>规模受限，通常只能做模块级</td></tr>
+</table>
+<div class="bad">
+<p><strong>为什么只做普通 UVM 仿真不够？</strong></p>
+<p>（1）RTL 仿真中 <code>a &lt;= b</code> 是零延迟 NBA 赋值，同步器的第一级<strong>永远采到确定值</strong>，不会出现亚稳态。</p>
+<p>（2）如果 testbench 里两个时钟都是整数倍、固定相位（<code>#5 clk = ~clk</code> 这种），采样关系是周期性固定的，<strong>永远只覆盖一种相位组合</strong>。硅上会扫过所有相位。</p>
+<p>（3）多 bit 不一致问题在 RTL 仿真中<strong>完全不出现</strong>——所有 bit 同时更新，看不到中间值。</p>
+<p>结论：RTL 仿真全绿 ≠ 没有 CDC 问题。必须加第 1、3 层。</p>
+</div>
+
+<h2 id="15">15. 仿真层面</h2>
+
+<h3 id="15-1">15.1 时钟随机化</h3>
+<p>最低成本、收益最高的改进：让 testbench 的时钟频率和初相在每次仿真中随机，而不是写死整数倍。</p>
+<pre><code>// 不好：固定整数比 + 零初相，永远只覆盖一种相位关系
+initial forever #5    clk_a = ~clk_a;    // 100 MHz
+initial forever #10   clk_b = ~clk_b;    // 50 MHz，固定同相
+
+// 好：周期和初相都随机化，每个 seed 覆盖不同相位关系
+class clk_cfg;
+    rand real  period_a;
+    rand real  period_b;
+    rand real  phase_b;
+    constraint c_range {
+        period_a inside {[4.8:5.2]};      // 含 ppm 级频差
+        period_b inside {[9.5:10.5]};
+        phase_b  inside {[0:10.0]};       // 随机初相，覆盖整个相位空间
+    }
+endclass
+
+initial begin
+    cfg.randomize();
+    fork
+        forever #(cfg.period_a/2) clk_a = ~clk_a;
+        begin #(cfg.phase_b); forever #(cfg.period_b/2) clk_b = ~clk_b; end
+    join_none
+end</code></pre>
+<table>
+<tr><th>随机化项</th><th>目的</th></tr>
+<tr><td>周期（含非整数倍、ppm 级频差）</td><td>覆盖采样点缓慢扫过数据沿的过程</td></tr>
+<tr><td>初始相位</td><td>覆盖所有相对相位关系</td></tr>
+<tr><td>复位撤离时刻</td><td>覆盖 RDC 和复位竞争场景</td></tr>
+<tr><td>时钟启停时刻（若有门控）</td><td>覆盖停钟时的握手卡死场景</td></tr>
+<tr><td>极端频率比（如 1000:1 和 1:1000）</td><td>覆盖快→慢丢失和慢→快的边界</td></tr>
+</table>
+
+<h3 id="15-2">15.2 亚稳态注入（关键）</h3>
+<p>核心技术：在 CDC 路径上<strong>人为注入随机的 0/1 延迟或随机值</strong>，模拟亚稳态解析结果的不确定性，验证下游功能逻辑是否鲁棒。</p>
+<div class="diagram">  正常仿真：
+    src ──────────▶ sync_q[0] ──▶ sync_q[1]      永远确定
+
+  注入后（在源→第一级之间插入随机模型）：
+    src ──▶ [random jitter / random delay] ──▶ sync_q[0] ──▶ sync_q[1]
+                      ↑
+            采样窗口内跳变时，随机决定本拍采到旧值还是新值
+            → 同步器输出可能比期望早/晚 1 拍 → 验证下游能否容忍</div>
+<h4>（a）使用 EDA 工具的内建功能（推荐）</h4>
+<p>主流 CDC 工具都能基于结构分析自动在所有识别出的 crossing 上插入亚稳态模型，生成一个带注入的仿真模型供回归使用。优点是不用改 testbench、覆盖完整、与 CDC 报告一致。</p>
+<h4>（b）手工模型（理解原理用）</h4>
+<pre><code>// 简化的亚稳态注入模型：采样窗口内跳变时随机延迟 1 拍
+module cdc_jitter_model (
+    input  wire clk_dst,
+    input  wire din,
+    output wire dout
+);
+`ifdef CDC_INJECT
+    reg din_dly;
+    always @(din) begin
+        // 随机决定这次变化是"立刻可见"还是"延后一个周期可见"
+        if ($urandom_range(0,1))
+            din_dly &lt;= din;                    // 立刻
+        else
+            @(posedge clk_dst) din_dly &lt;= din; // 延后一拍
+    end
+    assign dout = din_dly;
+`else
+    assign dout = din;
+`endif
+endmodule</code></pre>
+<div class="warn">
+<p><strong>注入仿真的判定标准</strong>：注入后 scoreboard 仍然全过，才说明功能对亚稳态鲁棒。注意 scoreboard 本身必须能容忍<strong>延迟的不确定性</strong>（用「最终一致性」而不是「第 N 拍必须等于 X」的比对方式），否则注入后会报出大量假失败。这是落地时最常见的工程障碍。</p>
+</div>
+<div class="note">
+<p>另外两个常用技巧：</p>
+<ul>
+<li><strong>X 传播（X-prop）仿真</strong>：把同步器第一级在采样窗口内的输出置 X，看 X 会不会传到关键控制信号。能发现对亚稳态敏感的逻辑。</li>
+<li><strong>门级带 SDF 仿真</strong>：用真实延迟，能发现 RTL 仿真掩盖的竞争，但速度极慢，一般只跑关键场景和复位序列。</li>
+</ul>
+</div>
+
+<h3 id="15-3">15.3 注入仿真的能力边界：为什么它"验不出来"</h3>
+<p><a href="#14">§14</a> 的表格里，第 3 层的"验不出什么"写的是<strong>极低概率事件；依赖随机种子数量</strong>。这句话值得展开，因为它直接决定了第 4 层形式验证为什么不可省。</p>
+<div class="bad">
+<p><strong>一句话</strong>：亚稳态注入仿真本质是<strong>蒙特卡洛采样</strong>，不是穷尽证明。它能证明"我注入了 N 次都没挂"，不能证明"所有情况都不挂"。而真正的 CDC bug 往往要求<strong>多个小概率条件同时成立</strong>，概率相乘后低到随机种子根本撞不上。</p>
+</div>
+
+<h4>（1）为什么是"极低概率事件"——条件要同时成立</h4>
+<p>一个 bug 要在注入仿真中暴露，需要下面几件事<strong>在同一拍同时发生</strong>：</p>
+<table>
+<tr><th>必须同时成立的条件</th><th>量级估计</th></tr>
+<tr><td>注入模型恰好作用在<strong>这一条</strong> crossing 上（设计里可能有几百条）</td><td>~1/100</td></tr>
+<tr><td>该拍源信号<strong>恰好在跳变</strong>（不跳变时注与不注结果相同）</td><td>1/50 ~ 1/1000（看活动率）</td></tr>
+<tr><td>注入方向恰好是<strong>致命的那一侧</strong>（早 1 拍 / 晚 1 拍，通常只有一侧出错）</td><td>1/2</td></tr>
+<tr><td>设计状态恰好落在<strong>敏感窗口</strong>（FIFO 将满、FSM 在特定 state、复位刚撤离……）</td><td>1/100 ~ 1/10000</td></tr>
+</table>
+<p>相乘后单次机会的命中概率大约在 <code>10⁻⁶ ~ 10⁻⁹</code>。一次仿真中有效的注入机会可能只有几千次，一轮回归几千个 seed——<strong>期望命中次数远小于 1</strong>。</p>
+<p>最典型的例子是重汇聚（<a href="#2-4">§2.4</a>）：必须<strong>两路同步器在同一拍、一路解析成 0、另一路解析成 1</strong> 才会出错。两路独立随机，概率本身就是平方级的。</p>
+
+<h4>（2）为什么"依赖种子数量"——收益是对数级的</h4>
+<div class="formula">P(至少命中一次) = 1 − (1 − p)<sup>N</sup>　　⇒　　要达到 90% 置信度需 N ≈ 2.3 / p</div>
+<table>
+<tr><th>单次命中概率 p</th><th>达到 90% 置信所需 seed 数 N</th></tr>
+<tr><td>10⁻³</td><td>约 2.3 千</td></tr>
+<tr><td>10⁻⁶</td><td>约 230 万</td></tr>
+<tr><td>10⁻⁹</td><td>约 23 亿（不可行）</td></tr>
+</table>
+<p>而且这只保证"<strong>发现一次</strong>"，不保证回归可复现。所以"加机器多跑 seed"的性价比很差：seed 翻 10 倍，置信度从 63% 升到 99.99%；但只要换一个 <code>p</code> 小一个量级的 bug，就又回到原点。这就是「依赖随机种子数量」的真实含义——<strong>用算力换置信度，且换得很贵</strong>。</p>
+
+<h4>（3）更根本的盲区：模型本身没建那些失效</h4>
+<p>比种子数量更麻烦的是，常见注入模型（包括上面 <code>cdc_jitter_model</code> 这种）只建模了"<strong>输出早/晚 1 拍</strong>"或"随机 0/1"，但真实亚稳态还有这些形态：</p>
+<table>
+<tr><th>真实硅上现象</th><th>常见注入模型是否建模</th></tr>
+<tr><td>第一级输出停在半电平，<strong>不同扇出看到不同逻辑值</strong>（扇出分裂）</td><td>几乎都没建</td></tr>
+<tr><td>亚稳态<strong>穿透到第二级</strong>（两级都没稳住）</td><td>一般只注第一级，没建</td></tr>
+<tr><td>clk-to-Q 被拉长，导致下游<strong>建立时间违例</strong></td><td>RTL 层面无法表达</td></tr>
+<tr><td>亚稳态期间的瞬时功耗尖峰 / 毛刺传播</td><td>没建</td></tr>
+</table>
+<div class="warn">
+<p><strong>模型里没有的现象，跑多少 seed 都出不来。</strong>这部分盲区与种子数量无关，加算力完全无效。</p>
+</div>
+
+<h4>（4）时间尺度的鸿沟</h4>
+<p>MTBF 公式（<a href="#1-2">§1.2</a>）给出的真实失效间隔是<strong>年</strong>量级，而且通常是按"百万颗芯片 × 数年"统计出来的。而一轮仿真跑的是<strong>毫秒级虚拟时间</strong>，两者差了十几个数量级。所以注入仿真从设计上就不是用来"复现硅上那次失效"的。</p>
+
+<h4>（5）正确定位与三个补救手段</h4>
+<div class="note">
+<p><strong>定位</strong>：注入仿真是<strong>证伪工具</strong>，不是证明工具。它抓的是"鲁棒性差到一注就挂"的设计——这类问题在实际项目中占多数，所以这一层很有价值，但<strong>不能单独作为签核依据</strong>。</p>
+</div>
+<table>
+<tr><th>手段</th><th>做法</th><th>解决上面哪个问题</th></tr>
+<tr><td><strong>过量注入</strong><br>over-injection</td><td>把注入率从"物理真实概率"拉高到<strong>每次跨域跳变都注</strong>，人为把 <code>p</code> 提高几个数量级</td><td>（1）（2）：直接压缩所需 seed 数。代价是会报一些物理上极罕见的场景，但对"功能必须容忍 ±1 拍"这个要求来说是正确的压力测试</td></tr>
+<tr><td><strong>注入事件绑定覆盖率</strong></td><td>对"注入发生时的设计状态"做 cross coverage，例如 <code>注入事件 × FIFO 深度桶 × FSM state × 复位阶段</code></td><td>（1）：把盲目随机变成<strong>有度量</strong>的覆盖，哪个桶没打到就定向补激励，而不是无脑加 seed</td></tr>
+<tr><td><strong>关键路径交给形式验证</strong></td><td>把同步器输出抽象成"<strong>任意延迟 0~1 拍的非确定性输入</strong>"，再穷尽证明协议成立（见 <a href="#17">§17</a>）</td><td>（1）（2）（4）：用穷尽替代采样，彻底绕开概率问题。这正是第 4 层必须存在的原因</td></tr>
+</table>
+<div class="good">
+<p><strong>落地建议</strong>：注入仿真跑"过量注入 + 覆盖率驱动"，保证公共同步单元和关键 CDC 接口模块<strong>各自做一次模块级形式证明</strong>，再靠设计规则 R1（只允许使用库化同步单元，见 <a href="#7">§7</a>）把模块级的结论推广到全芯片。这是在有限算力下能达到的最高置信度组合。</p>
+</div>
+
+<h2 id="16">16. SVA 断言库</h2>
+<p>每种同步机制都有它的<strong>前提条件</strong>，这些条件必须用断言显式检查——尤其是那些被用来给 CDC 工具写 <code>qualifier</code> 的假设。</p>
+
+<h5>（1）数据冻结：valid 有效期间 data 不许变（MUX 同步的前提）</h5>
+<pre><code>// 对应 §5.2 和 SGDC 里的 qualifier 声明
+property p_data_stable_during_valid;
+    @(posedge clk_src) disable iff (!rst_src_n)
+        valid_src |-&gt; $stable(data_src);
+endproperty
+a_data_stable: assert property (p_data_stable_during_valid)
+    else $error("CDC: data_src changed while valid_src asserted!");</code></pre>
+
+<h5>（2）格雷码：任意跳变只能有 1 位不同</h5>
+<pre><code>property p_gray_one_bit;
+    @(posedge wclk) disable iff (!wrst_n)
+        $changed(wptr_gray) |-&gt; ($countones(wptr_gray ^ $past(wptr_gray)) == 1);
+endproperty
+a_gray: assert property (p_gray_one_bit)
+    else $error("CDC: gray pointer changed more than 1 bit!");</code></pre>
+
+<h5>（3）握手协议：req 必须等到 ack，且序列合法</h5>
+<pre><code>// req 抬起后必须保持到 ack 到来（不能中途撤销）
+property p_req_hold;
+    @(posedge clk_src) disable iff (!rst_src_n)
+        $rose(req) |-&gt; req throughout (ack_sync[-&gt;1]);
+endproperty
+a_req_hold: assert property (p_req_hold);
+
+// ack 必须在有限时间内返回（活性检查，防死锁）
+property p_ack_bounded;
+    @(posedge clk_src) disable iff (!rst_src_n)
+        $rose(req) |-&gt; ##[1:MAX_LAT] ack_sync;
+endproperty
+a_ack_bounded: assert property (p_ack_bounded)
+    else $error("CDC: handshake timeout, possible deadlock!");</code></pre>
+
+<h5>（4）脉冲宽度：快→慢时源脉冲必须足够宽</h5>
+<pre><code>// 在接收域检查：源信号抬起后至少维持 MIN_CYC 个接收周期
+property p_pulse_wide_enough;
+    @(posedge clk_dst) disable iff (!rst_dst_n)
+        $rose(src_level) |-&gt; src_level[*MIN_CYC];
+endproperty
+a_pulse_width: assert property (p_pulse_wide_enough)
+    else $error("CDC: source pulse too narrow, may be lost!");</code></pre>
+
+<h5>（5）异步 FIFO：不许溢出 / 不许读空</h5>
+<pre><code>a_no_overflow:  assert property (@(posedge wclk) disable iff(!wrst_n)
+                                 !(wen &amp;&amp; full));
+a_no_underflow: assert property (@(posedge rclk) disable iff(!rrst_n)
+                                 !(ren &amp;&amp; empty));
+
+// 事务级：写进去的每个数据最终必须按序被读出（用 scoreboard 或 FIFO 模型配合）</code></pre>
+
+<h5>（6）Toggle 同步：相邻事件间隔足够</h5>
+<pre><code>// 保证 toggle 翻转间隔 &gt; 接收域同步延迟，否则会丢事件（§4.2 警告）
+property p_toggle_spacing;
+    @(posedge clk_src) disable iff (!rst_src_n)
+        $changed(tog) |-&gt; ##1 $stable(tog)[*MIN_GAP];
+endproperty
+a_toggle_gap: assert property (p_toggle_spacing)
+    else $error("CDC: toggle events too close, event may be lost!");</code></pre>
+
+<div class="good">
+<p><strong>断言与 CDC 工具约束要一一对应</strong>。写了 <code>qualifier -name valid_src -crossing data_src</code>，就必须有断言 (1)；声明了 <code>quasi_static</code>，就必须有断言证明该信号运行时不变。<strong>把这个对应关系做成表格并在签核时逐行核对</strong>，是 CDC 验证最有效的管理手段。</p>
+</div>
+
+<h2 id="17">17. 形式验证</h2>
+<p>形式方法在 CDC 上的价值：它<strong>穷尽</strong>所有时钟相位关系和状态，不依赖激励。这正好弥补仿真的最大弱点。</p>
+<table>
+<tr><th>用法</th><th>说明</th></tr>
+<tr><td><strong>工具自动生成 CDC 断言</strong></td><td>CDC 工具的 formal 模式会基于识别出的同步结构自动生成协议断言并证明，无需手写</td></tr>
+<tr><td><strong>证明同步器模块自身</strong></td><td>对 <code>cdc_handshake</code>、<code>cdc_async_fifo</code> 这些公共单元做一次彻底的形式证明，之后全项目复用，收益极高</td></tr>
+<tr><td><strong>证明 qualifier 假设</strong></td><td>比仿真更可靠地证明「valid 期间 data 恒定」这类前提</td></tr>
+<tr><td><strong>抽象时钟建模</strong></td><td>形式工具可以把异步时钟建模为完全自由的，涵盖任意频率比和相位——仿真做不到</td></tr>
+</table>
+<div class="note">
+<p>形式验证的规模限制很实际：全芯片跑不动。正确的用法是<strong>把公共同步单元和关键 CDC 接口模块单独做形式证明</strong>，然后靠设计规则 R1（只用公共单元）把结论推广到全芯片。这也再次说明 <a href="#7">§7</a> 的库化封装为什么重要。</p>
+</div>
+
+<h2 id="18">18. 覆盖率与签核清单</h2>
+<h3>CDC 专项覆盖率</h3>
+<table>
+<tr><th>覆盖项</th><th>怎么收</th></tr>
+<tr><td>每个 crossing 是否被激励经过</td><td>对同步器输入信号做 toggle coverage</td></tr>
+<tr><td>相位关系覆盖</td><td>cross 覆盖：源数据跳变相对接收时钟沿的位置分桶</td></tr>
+<tr><td>频率比覆盖</td><td>covergroup 覆盖 1:1 / 快→慢 / 慢→快 / 极端比例</td></tr>
+<tr><td>FIFO 边界状态</td><td>empty / full / almost_* / 回绕都要覆盖</td></tr>
+<tr><td>握手异常路径</td><td>超时、复位中途打断、背靠背连续请求</td></tr>
+<tr><td>复位场景</td><td>两域独立复位、复位撤离顺序的各种组合（RDC）</td></tr>
+</table>
+
+<h3>Tapeout 前 CDC 签核清单</h3>
+<table>
+<tr><th>#</th><th>检查项</th><th>通过标准</th></tr>
+<tr><td>1</td><td>时钟域清单文档</td><td>所有时钟、频率范围、域间关系、合法 crossing 全部列出并 review</td></tr>
+<tr><td>2</td><td>CDC 结构检查</td><td>RTL 与门级网表均零 error；所有 warning 有书面结论</td></tr>
+<tr><td>3</td><td>RDC 检查</td><td>单独跑并签核（不能和 CDC 混在一起）</td></tr>
+<tr><td>4</td><td>SGDC 约束 review</td><td>每条 <code>qualifier</code> / <code>quasi_static</code> / <code>sync_cell</code> 都有依据</td></tr>
+<tr><td>5</td><td>Waiver review</td><td>逐条有署名、日期、理由；无通配符批量 waive</td></tr>
+<tr><td>6</td><td>SVA 对应关系表</td><td>每条工具假设都有对应断言，且断言在回归中通过</td></tr>
+<tr><td>7</td><td>亚稳态注入回归</td><td>已跑足够 seed 数，全部通过</td></tr>
+<tr><td>8</td><td>时钟随机化</td><td>testbench 时钟周期/相位已随机化，非固定整数比</td></tr>
+<tr><td>9</td><td>形式验证</td><td>所有公共同步单元已形式证明</td></tr>
+<tr><td>10</td><td>SDC 一致性</td><td><code>clock_groups</code> 与时钟域清单一致；跨域路径都有 <code>set_max_delay -datapath_only</code></td></tr>
+<tr><td>11</td><td>约束生效确认</td><td><code>report_exceptions -ignored</code> 无意外的空集合/被忽略项</td></tr>
+<tr><td>12</td><td>同步器保护确认</td><td>网表中确认两级 FF 未被合并/优化；<code>set_size_only</code> 生效</td></tr>
+<tr><td>13</td><td>CDC 覆盖率</td><td>crossing toggle 覆盖、频率比覆盖达标</td></tr>
+</table>
+
+<div class="note">
+<p><strong>全文一句话总结</strong>：CDC 的正确性由三件事共同保证——<strong>结构化设计</strong>（库化同步器 + 禁忌规则，让人写不错）、<strong>双套约束</strong>（SDC 保物理质量 + SGDC 让工具能查）、<strong>多层验证</strong>（静态结构 + SVA 协议断言 + 亚稳态注入 + 形式验证）。任何一环缺失，都会留下只在特定芯片、特定温度、特定频率下偶发的硅上问题。</p>
+</div>
+
+<footer>本文整理自一次关于数字芯片跨时钟域（CDC）设计、约束与验证的技术讨论。</footer>
+</div>
+<script>
+(function(){
+  var nav    = document.getElementById('nav');
+  var toggle = document.getElementById('nav-toggle');
+  var links  = [].slice.call(nav.querySelectorAll('a'));
+  var targets = links.map(function(a){
+    return document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  });
+  toggle.addEventListener('click', function(){ nav.classList.toggle('open'); });
+  nav.addEventListener('click', function(e){
+    if (e.target.tagName === 'A') nav.classList.remove('open');
+  });
+  function highlight(){
+    var i, cur = 0;
+    for (i = 0; i < targets.length; i++) {
+      if (targets[i] && targets[i].getBoundingClientRect().top <= 80) cur = i;
+    }
+    if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 4)
+      cur = targets.length - 1;
+    for (i = 0; i < links.length; i++) links[i].classList.toggle('active', i === cur);
+    var act = links[cur];
+    if (act.offsetTop < nav.scrollTop ||
+        act.offsetTop + act.offsetHeight > nav.scrollTop + nav.clientHeight) {
+      nav.scrollTop = act.offsetTop - nav.clientHeight / 2;
+    }
+  }
+  var pending = false;
+  window.addEventListener('scroll', function(){
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function(){ pending = false; highlight(); });
+  });
+  window.addEventListener('resize', highlight);
+  highlight();
+})();
+</script>
+</body>
+</html>
