@@ -636,10 +636,10 @@ body.has-nav .wrap{margin-left:264px}
   <g font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
     <rect x="24" y="404" width="912" height="46" rx="6" fill="#f6f8fa" stroke="#d1d9e0"/>
     <text x="40" y="423" font-size="12.5" fill="#1f2328">
-      <tspan font-weight="700">电平型</tspan>：③ 直通，④ 的 pending 跟随根因；根因不消失，清了也会立刻重新置位 → 必须靠 mask 止损。
+      <tspan font-weight="700">① 的源头都是电平</tspan>，差别只在能保持多久；③ 决定要不要对它求导：直通 = 持续型，加 <tspan font-family="ui-monospace,Consolas,monospace">src &amp; ~src_d</tspan> = 瞬时型。
     </text>
     <text x="40" y="441" font-size="12.5" fill="#1f2328">
-      <tspan font-weight="700">脉冲型</tspan>：③ 做边沿检测，④ <tspan font-weight="700">必须</tspan>锁存，否则一拍脉冲过去中断就永久丢失；清除后需等下一次事件才会再置位。
+      判据：<tspan font-weight="700">这个电平会不会在软件响应前自己消失</tspan>（或需不需要计次）——会就必须捕获 + 锁存，不会就电平直通（靠 mask 防风暴）。
     </text>
   </g>
 </svg>
@@ -807,6 +807,56 @@ body.has-nav .wrap{margin-left:264px}
 </div>
 
 <h2 id="5">5. 电平型中断源</h2>
+
+<div class="note">
+<p><strong>先厘清一个常见误解："电平"与"边沿"不是两种物理量，区别在于持续时长。</strong></p>
+<p>在数字电路里，任何信号在任何时刻都只有 0 和 1 两个取值——<strong>不存在一种叫"边沿"的物理量</strong>。边沿必须用寄存器打一拍、再和当前值比较才能算出来，本质是<strong>对电平求导</strong>：</p>
+<pre><code>wire rise = cond &amp; ~cond_d;   // 边沿 = 由电平算出来的，不是天生的</code></pre>
+<p>所以严格说，所有源头都是电平。真正有意义的区分是<strong>这个电平能保持多久</strong>：</p>
+<table>
+<tr><th>类别</th><th>持续时长</th><th>由谁决定何时结束</th><th>不锁存会怎样</th></tr>
+<tr><td><strong>持续型电平</strong><br>（通常简称"电平型"）</td><td>条件成立期间一直有效，<strong>可长达任意久</strong></td><td><strong>软件</strong>——消除根因它才撤销</td><td>没关系，软件随时来读都在</td></tr>
+<tr><td><strong>瞬时型电平</strong><br>（通常简称"脉冲 / 边沿型"）</td><td><strong>只有一拍或几拍</strong></td><td><strong>硬件</strong>——自己走完就撤销，不等软件</td><td><strong>永久丢失</strong></td></tr>
+</table>
+<p>关键差别不在"是不是电平"，而在<strong>软件来得及不来得及看到它</strong>。</p>
+</div>
+
+<div class="warn">
+<p><strong>注意同一个事件可以有两种形态，取决于 IP 怎么实现。</strong>以 DMA 传输完成为例：</p>
+<ul>
+<li><strong>实现 A</strong>：状态机进入 <code>DONE</code> 态后<strong>停在那里</strong>，等软件读状态寄存器才离开 → <code>done</code> 是<strong>持续型电平</strong>。</li>
+<li><strong>实现 B</strong>：状态机经过 <code>DONE</code> 态一拍就回 <code>IDLE</code> 准备下一轮 → <code>done</code> 是<strong>瞬时型电平（一拍脉冲）</strong>，<a href="#6-1">§6.1</a> 说的就是这种。</li>
+</ul>
+<p>绝大多数现代 DMA 是<strong>实现 B</strong>（为了背靠背连续搬运不停顿），所以 §6.1 把它列为必须锁存的脉冲型。<strong>看一个源属于哪类，不能看它叫什么名字，要看它的产生逻辑会不会自己撤销。</strong></p>
+</div>
+
+<p>那为什么 pending 锁存器总是用脉冲去 set？因为它要的是一个<strong>一拍的 set 使能</strong>，而不是一个持续成立的条件：</p>
+<pre><code>if (event_pulse) pending &lt;= 1'b1;   // 要的是"一次置位"</code></pre>
+<p>如果把持续型电平直接接到 <code>set</code> 端，就会出现"软件刚写 1 清掉、下一拍又被条件顶起来"的现象——因为条件压根没消失。这正是 <a href="#11">§11</a> 要讨论的清除竞争的根源之一。</p>
+
+<p>于是真正的设计决策点是：<strong>要不要在捕获级加边沿检测</strong>。判据有两条，命中任意一条就必须加：</p>
+
+<div class="diagram">  判据一：这个电平会不会在软件响应前自己消失？
+    └── 会 ──▶ 必须边沿捕获 + 锁存
+               例：一拍的 done、timer 回绕、ECC 纠错事件
+               理由：不锁存 = 事件永久丢失
+
+  判据二：软件需不需要知道"它发生过几次"？
+    └── 需要 ─▶ 必须边沿捕获 + 锁存（再配 overflow / CNT）
+               例：FIFO 溢出次数、错误计数
+               理由：持续电平只能表达"现在有"，表达不了"发生了 N 次"
+
+  两条都不命中 ──▶ 电平直通，不做捕获
+               例：FIFO 非空、过温、共享 nIRQ
+               理由：条件在中断就在，条件没了自动撤销，
+                     天然不丢也不误报，清除 = 消除根因</div>
+
+<p>映射到 <a href="#3">图 3-2</a> 的第 ③ 格「捕获逻辑」，以及 <a href="#12">§12</a> 的参考实现，就是这一行配置位在起作用：</p>
+<pre><code>assign src_rise  = src_i &amp; ~src_d;                       // 边沿由电平算出
+assign event_vec = ( cfg_edge_mode &amp; (src_rise | pulse_i))   // 边沿捕获模式
+                 | (~cfg_edge_mode &amp;  src_i);                // 电平直通模式</code></pre>
+<p>可以看到<strong>两种模式共用同一个输入 <code>src_i</code></strong>，区别只在于中间插不插那个求导逻辑。下面两节分别展开这两种模式的完整行为——<strong>§5 讲持续型，<a href="#6">§6</a> 讲瞬时型</strong>。</p>
+
 <p><strong>定义</strong>：中断请求信号在<strong>中断条件成立期间一直保持有效电平</strong>，条件消失后自动变回无效。信号本身就携带"当前状态"。</p>
 <div class="diagram">  触发条件  ───┐ fifo_cnt &gt;= threshold         ┌─── 条件消失（软件读走数据）
                ▼                                ▼
@@ -843,7 +893,7 @@ body.has-nav .wrap{margin-left:264px}
 <table>
 <tr><th>问题</th><th>说明</th><th>对策</th></tr>
 <tr><td><strong>无法表达"发生了 N 次"</strong></td><td>只知道"现在条件成立"，不知道期间发生了几次</td><td>需要计数的场合（如溢出次数）必须另配计数器或用边沿型</td></tr>
-<tr><td><strong>瞬时事件无法表达</strong></td><td>"一次传输完成"这种只存在一拍的事件，没有可持续的状态</td><td>必须转成锁存型（见 <a href="#8">§8</a>）</td></tr>
+<tr><td><strong>瞬时事件无法表达</strong></td><td>"一次传输完成"这种电平只存在一拍，硬件自己就撤销了，软件根本采不到</td><td>必须转成锁存型（见 <a href="#8">§8</a>）</td></tr>
 <tr><td><strong>必须消除根因才能退出 ISR</strong></td><td>软件只清寄存器没用，不读数据就会立刻重入</td><td>ISR 流程必须正确，手册要写明"清除方式 = 消除条件"</td></tr>
 <tr><td><strong>反复进 ISR / 中断风暴</strong></td><td>根因无法立即消除（如温度不降）时，ISR 疯狂重入，系统卡死</td><td>ISR 中<strong>临时屏蔽该源</strong>，交由任务处理，处理完再解屏蔽</td></tr>
 <tr><td><strong>一次中断延迟较大</strong></td><td>需等待整个电平同步传播</td><td>一般不是瓶颈</td></tr>
@@ -853,7 +903,7 @@ body.has-nav .wrap{margin-left:264px}
 </div>
 
 <h2 id="6">6. 脉冲 / 边沿型中断源</h2>
-<p><strong>定义</strong>：中断请求是一个<strong>瞬时事件</strong>——持续一个（或几个）时钟周期的脉冲，或信号的一次跳变沿。事件本身不携带持续状态，<strong>必须被硬件锁存成 pending 位</strong>，否则 CPU 还没来得及响应，信号就消失了。</p>
+<p><strong>定义</strong>：中断请求是一个<strong>瞬时事件</strong>——持续一个（或几个）时钟周期的脉冲，或信号的一次跳变沿。它<strong>由硬件自己撤销、不等软件</strong>，因此<strong>必须被硬件锁存成 pending 位</strong>，否则 CPU 还没来得及响应，信号就消失了。</p>
 <div class="diagram">  事件脉冲   ────┐  ┌─┐     ┌─┐
                  └──┘ └─────┘ └────────────    ← 只有 1 拍，不锁存就没了
                       │       │
@@ -866,10 +916,10 @@ body.has-nav .wrap{margin-left:264px}
 
   核心规则：脉冲型中断源 ⇒ 必须有 pending 锁存 + 明确的清除端口</div>
 
-<h3>6.1 典型的脉冲 / 边沿型中断源</h3>
+<h3 id="6-1">6.1 典型的脉冲 / 边沿型中断源</h3>
 <table>
 <tr><th>中断源</th><th>事件</th><th>为什么必须锁存</th></tr>
-<tr><td>DMA 传输完成</td><td><code>done</code> 拉高一拍</td><td>完成是瞬时事件，没有持续状态</td></tr>
+<tr><td>DMA 传输完成</td><td><code>done</code> 拉高一拍</td><td>状态机过 <code>DONE</code> 态即回 <code>IDLE</code>，电平自己就撤销了</td></tr>
 <tr><td>定时器溢出 / 匹配</td><td>计数器回绕那一拍</td><td>下一拍计数器就继续走了</td></tr>
 <tr><td>SPI/I2C 传输结束</td><td><code>xfer_done</code> 一拍</td><td>同上</td></tr>
 <tr><td>FIFO 溢出 / 下溢错误</td><td>错误发生那一拍</td><td>错误是事件，不是状态；而且<strong>软件需要知道发生过</strong></td></tr>
@@ -910,10 +960,10 @@ always @(posedge clk) irq_o &lt;= done_pulse;</code></pre>
 
 <h2 id="7">7. 两种类型的对比与选型</h2>
 <table>
-<tr><th>维度</th><th>电平型</th><th>脉冲 / 边沿型</th></tr>
-<tr><td>信号语义</td><td>状态（还有活要干）</td><td>事件（发生了一次）</td></tr>
-<tr><td>是否必须锁存</td><td>否（源自带保持）</td><td><strong>是</strong></td></tr>
-<tr><td>丢中断风险</td><td>低</td><td>高（不锁存必丢）</td></tr>
+<tr><th>维度</th><th>电平型（持续型电平）</th><th>脉冲 / 边沿型（瞬时型电平）</th></tr>
+<tr><td>信号语义</td><td>条件持续成立，软件来读时它还在</td><td>条件只成立一拍，硬件自己就撤销了</td></tr>
+<tr><td>是否必须锁存</td><td>否（电平自己能撑到软件响应）</td><td><strong>是</strong>（不锁存必丢）</td></tr>
+<tr><td>丢中断风险</td><td>低（源一直举着手）</td><td>高（漏采一拍就永久丢失）</td></tr>
 <tr><td>如何清除</td><td>消除根因（读数据、清错误状态）</td><td>写 1 清 pending / 读清 / 自清</td></tr>
 <tr><td>中断风暴风险</td><td>高（根因不消失就反复进）</td><td>低</td></tr>
 <tr><td>能否表达次数</td><td>不能</td><td>能（配 overflow 位或计数器）</td></tr>
@@ -924,16 +974,16 @@ always @(posedge clk) irq_o &lt;= done_pulse;</code></pre>
 </table>
 
 <h3>7.1 选型决策</h3>
-<div class="diagram">  这个中断的根因是"持续状态"还是"瞬时事件"？
+<div class="diagram">  这个中断条件的电平，能不能撑到软件来读？
    │
-   ├── 持续状态（FIFO 有数据 / 错误状态寄存器非 0 / 条件成立）
-   │     └──▶ 电平型
+   ├── 撑得住（FIFO 有数据 / 错误状态寄存器非 0 / 条件成立期间一直有效）
+   │     └──▶ 电平型（持续型电平，直通）
    │          · 直接把条件接出来，不锁存
    │          · 手册写明"清除 = 消除条件"
    │          · 驱动采用"ISR 自屏蔽"模式防风暴
    │
-   └── 瞬时事件（完成 / 溢出 / 跳变 / 一次性错误）
-         └──▶ 脉冲型
+   └── 撑不住（只有一拍：完成 / 溢出 / 跳变 / 一次性错误）
+         └──▶ 脉冲型（瞬时型电平，必须捕获）
               · 必须做 pending 锁存（set 优先）
               · 提供 W1C 清除端口
               · 软件关心次数 ⇒ 加 overflow 标志
@@ -1511,7 +1561,7 @@ a_rst_mask: assert property (@(posedge clk)
 </table>
 
 <div class="note">
-<p><strong>全文一句话总结</strong>：中断设计的正确性归结为三个判断——<strong>源是状态还是事件</strong>（决定电平型还是脉冲型，进而决定要不要锁存）、<strong>每一层的放行与拦截是否可见可控</strong>（RAW/MASK/STATUS 齐全、只锁存一次、逐级可查）、<strong>清除动作与新事件竞争时谁赢</strong>（必须置位优先，且软件清除要考虑写缓冲）。这三件事做对，中断就不会丢、不会卡、不会风暴。</p>
+<p><strong>全文一句话总结</strong>：中断设计的正确性归结为三个判断——<strong>源的电平能不能撑到软件来看</strong>（撑得住就电平直通，撑不住就必须边沿捕获 + 锁存）、<strong>每一层的放行与拦截是否可见可控</strong>（RAW/MASK/STATUS 齐全、只锁存一次、逐级可查）、<strong>清除动作与新事件竞争时谁赢</strong>（必须置位优先，且软件清除要考虑写缓冲）。这三件事做对，中断就不会丢、不会卡、不会风暴。</p>
 </div>
 
 <footer>本文整理自一次关于数字芯片中断架构、分类、层级控制与清除机制的技术讨论。</footer>
