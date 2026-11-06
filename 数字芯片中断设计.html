@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>数字芯片中断：架构、分类、层级与清除机制</title>
+<style>:root{--bg:#ffffff;--fg:#1f2328;--muted:#656d76;--line:#d1d9e0;--code-bg:#f6f8fa;--accent:#0969da;--warn-bg:#fff8c5;--warn-line:#d4a72c;--ok-bg:#dafbe1;--ok-line:#2da44e;--bad-bg:#ffebe9;--bad-line:#cf222e}
+*{box-sizing:border-box}
+body{margin:0;padding:0 24px 80px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans","PingFang SC","Microsoft YaHei",Helvetica,Arial,sans-serif;font-size:16px;line-height:1.7;color:var(--fg);background:var(--bg)}
+.wrap{max-width:900px;margin:0 auto}
+header{padding:40px 0 8px}
+h1{font-size:30px;font-weight:600;margin:0 0 8px;line-height:1.3}
+header .sub{color:var(--muted);font-size:15px;margin:0}
+h2{font-size:23px;font-weight:600;margin:48px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+h3{font-size:18px;font-weight:600;margin:32px 0 12px}
+h4{font-size:16px;font-weight:600;margin:24px 0 8px}
+h5{font-size:14.5px;font-weight:600;margin:20px 0 6px;color:var(--accent)}
+p{margin:12px 0}
+ul,ol{margin:12px 0;padding-left:26px}
+li{margin:6px 0}
+code{font-family:ui-monospace,Consolas,"Courier New",monospace;font-size:13.5px;background:var(--code-bg);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin:16px 0;overflow-x:auto}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.55}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14.5px}
+th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+th{background:var(--code-bg);font-weight:600}
+.note,.warn,.good,.bad{padding:12px 16px;margin:16px 0;border-radius:6px;border-left:4px solid var(--accent);background:#ddf4ff}
+.warn{border-left-color:var(--warn-line);background:var(--warn-bg)}
+.good{border-left-color:var(--ok-line);background:var(--ok-bg)}
+.bad{border-left-color:var(--bad-line);background:var(--bad-bg)}
+.note p:first-child,.warn p:first-child,.good p:first-child,.bad p:first-child{margin-top:0}
+.note p:last-child,.warn p:last-child,.good p:last-child,.bad p:last-child{margin-bottom:0}
+.diagram{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:18px;margin:16px 0;overflow-x:auto;font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre}
+.formula{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:14px 18px;margin:16px 0;text-align:center;font-family:ui-monospace,Consolas,monospace;font-size:15px;overflow-x:auto}
+.svgfig{border:1px solid var(--line);border-radius:6px;padding:14px 10px 8px;margin:20px 0;background:#fff;overflow-x:auto}
+.svgfig svg{display:block;min-width:620px}
+.svgfig .cap{margin:10px 0 2px;text-align:center;color:var(--muted);font-size:13px}
+.mindmap{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:24px 20px;margin:20px 0;overflow-x:auto}
+.mindmap ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;justify-content:center}
+.mindmap li{display:flex;align-items:center;position:relative;margin:0;padding:3px 0}
+.mindmap li>ul{position:relative;padding-left:34px;margin:0}
+.mindmap li>ul::before{content:"";position:absolute;left:0;top:50%;width:16px;border-top:1px solid var(--line)}
+.mindmap li>ul>li::before{content:"";position:absolute;left:-18px;top:50%;width:18px;border-top:1px solid var(--line)}
+.mindmap li>ul>li::after{content:"";position:absolute;left:-18px;top:0;bottom:0;border-left:1px solid var(--line)}
+.mindmap li>ul>li:first-child::after{top:50%}
+.mindmap li>ul>li:last-child::after{bottom:50%}
+.mindmap li>ul>li:only-child::after{display:none}
+.mindmap .n{display:inline-block;white-space:nowrap;padding:5px 11px;border-radius:5px;border:1px solid var(--line);background:#fff;font-size:13.5px;line-height:1.4;text-decoration:none;color:var(--fg)}
+.mindmap a.n:hover{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 2px #ddf4ff}
+.mindmap .l0{background:var(--accent);color:#fff;border-color:var(--accent);font-size:16px;font-weight:600;padding:9px 18px}
+.mindmap .l1{background:#ddf4ff;border-color:#9fd0fb;font-weight:600;color:#0a4a82}
+.mindmap .hot{background:var(--ok-bg);border-color:var(--ok-line);font-weight:600}
+.mindmap .risk{background:var(--bad-bg);border-color:var(--bad-line)}
+.mindmap .tag{color:var(--muted);font-size:12px;font-weight:400;margin-left:6px}
+.mm-legend{display:flex;flex-wrap:wrap;gap:16px;margin:10px 0 0;padding-top:12px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.mm-legend span::before{content:"";display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid var(--line)}
+.mm-legend .k-hot::before{background:var(--ok-bg);border-color:var(--ok-line)}
+.mm-legend .k-risk::before{background:var(--bad-bg);border-color:var(--bad-line)}
+.mm-legend .k-norm::before{background:#fff}
+.part{margin:72px 0 8px;padding:16px 20px;border-radius:8px;background:#ddf4ff;border:1px solid #9fd0fb}
+.part .pn{font-size:12px;color:var(--accent);font-weight:600;letter-spacing:1px}
+.part h2{border:0;margin:2px 0 0;padding:0;font-size:26px}
+.part .pd{margin:6px 0 0;color:#4a5a6a;font-size:14px}
+footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+#nav{position:fixed;top:0;left:0;width:264px;height:100vh;overflow-y:auto;padding:28px 14px 40px;background:var(--code-bg);border-right:1px solid var(--line);font-size:13.5px;line-height:1.5;z-index:20}
+#nav .nav-title{font-weight:600;font-size:14px;margin:0 0 12px;padding-left:8px;color:var(--fg)}
+#nav a{display:block;color:var(--muted);text-decoration:none;padding:3px 8px;border-radius:4px;border-left:2px solid transparent}
+#nav a:hover{background:#eaeef2;color:var(--fg)}
+#nav a.active{color:var(--accent);background:#ddf4ff;border-left-color:var(--accent);font-weight:600}
+#nav a.lv1{font-weight:600;color:var(--fg);margin-top:10px}
+#nav a.lv2{padding-left:20px}
+#nav a.lv3{padding-left:34px;font-size:13px}
+#nav a.lv4{padding-left:48px;font-size:12.5px}
+body.has-nav .wrap{margin-left:264px}
+#nav-toggle{display:none;position:fixed;top:12px;left:12px;z-index:30;width:38px;height:38px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:17px;cursor:pointer}
+@media (max-width:1180px){#nav{transform:translateX(-100%);transition:transform .2s ease}#nav.open{transform:none;box-shadow:0 0 0 100vmax rgba(0,0,0,.25)}body.has-nav .wrap{margin-left:0}#nav-toggle{display:block}header{padding-top:60px}}</style>
+</head>
+<body class="has-nav">
+<button id="nav-toggle" title="目录">☰</button>
+<nav id="nav">
+<p class="nav-title">目录</p>
+<a class="lv1" href="#P1">第一部分 · 中断概述</a>
+<a class="lv2" href="#0">0. 中断全景图</a>
+<a class="lv2" href="#1">1. 什么是中断</a>
+<a class="lv3" href="#1-1">1.1 中断 vs 轮询</a>
+<a class="lv3" href="#1-2">1.2 一次中断的完整时间线</a>
+<a class="lv3" href="#1-3">1.3 关键术语</a>
+<a class="lv1" href="#P2">第二部分 · 分类</a>
+<a class="lv2" href="#2">2. 中断的分类</a>
+<a class="lv3" href="#2-1">2.1 按来源：内部 / 外部</a>
+<a class="lv3" href="#2-2">2.2 按可否屏蔽：可屏蔽 / 不可屏蔽</a>
+<a class="lv3" href="#2-3">2.3 按触发方式：电平 / 边沿</a>
+<a class="lv3" href="#2-4">2.4 按向量化程度</a>
+<a class="lv3" href="#2-5">2.5 按安全域 / 特权级</a>
+<a class="lv3" href="#2-6">2.6 异常 / 陷阱 / 中断的区别</a>
+<a class="lv1" href="#P3">第三部分 · 层级与使能屏蔽</a>
+<a class="lv2" href="#3">3. 中断的层级结构</a>
+<a class="lv3" href="#3-1">3.1 L0 源级</a>
+<a class="lv3" href="#3-2">3.2 L1 模块级</a>
+<a class="lv3" href="#3-3">3.3 L2 子系统 / 聚合级</a>
+<a class="lv3" href="#3-4">3.4 L3 控制器级（PLIC/GIC/NVIC）</a>
+<a class="lv3" href="#3-5">3.5 L4 CPU 全局级</a>
+<a class="lv2" href="#4">4. 使能、屏蔽与状态寄存器</a>
+<a class="lv3" href="#4-1">4.1 RAW / MASK / MASKED 三件套</a>
+<a class="lv3" href="#4-2">4.2 enable 与 mask 的极性之争</a>
+<a class="lv3" href="#4-3">4.3 屏蔽发生在哪一级</a>
+<a class="lv3" href="#4-4">4.4 优先级与抢占</a>
+<a class="lv1" href="#P4">第四部分 · 中断源类型</a>
+<a class="lv2" href="#5">5. 电平型中断源</a>
+<a class="lv2" href="#6">6. 脉冲 / 边沿型中断源</a>
+<a class="lv2" href="#7">7. 两种类型的对比与选型</a>
+<a class="lv2" href="#8">8. 电平/脉冲转换电路</a>
+<a class="lv2" href="#9">9. 中断源的跨时钟域与去抖</a>
+<a class="lv1" href="#P5">第五部分 · 清除机制</a>
+<a class="lv2" href="#10">10. 清除方式总览</a>
+<a class="lv3" href="#10-1">10.1 软件写 1 清除 W1C</a>
+<a class="lv3" href="#10-2">10.2 读清除 RC</a>
+<a class="lv3" href="#10-3">10.3 硬件自清除</a>
+<a class="lv3" href="#10-4">10.4 条件消失才清（电平型）</a>
+<a class="lv3" href="#10-5">10.5 EOI / 控制器侧清除</a>
+<a class="lv2" href="#11">11. 清除时序与竞争</a>
+<a class="lv3" href="#11-1">11.1 写清与置位同拍的竞争</a>
+<a class="lv3" href="#11-2">11.2 清除后仍反复进 ISR</a>
+<a class="lv3" href="#11-3">11.3 写缓冲导致的重入</a>
+<a class="lv3" href="#11-4">11.4 事件合并与丢失计数</a>
+<a class="lv1" href="#P6">第六部分 · 实现与验证</a>
+<a class="lv2" href="#12">12. 可综合参考实现</a>
+<a class="lv2" href="#13">13. 典型 Bug 清单</a>
+<a class="lv2" href="#14">14. 验证要点与覆盖率</a>
+<a class="lv2" href="#15">15. 设计规范与签核清单</a>
+</nav>
+<div class="wrap">
+<header>
+<h1>数字芯片中断：架构、分类、层级与清除机制</h1>
+<p class="sub">中断概述 · 六维分类 · 五层层级与各层使能屏蔽 · 电平型与脉冲型中断源 · W1C / 读清 / 自清除 / EOI · 清除竞争与典型 Bug</p>
+</header>
+
+<div class="part" id="P1">
+<div class="pn">第 一 部 分</div>
+<h2>中断概述</h2>
+<p class="pd">先说清中断解决的是什么问题、一次中断从硬件事件到软件服务要经过哪些环节，后面所有的分类、层级、清除机制都挂在这条链路上。</p>
+</div>
+<h2 id="0">0. 中断全景图</h2>
+<p>下图是全文框架，每个节点可点击跳转到对应章节。</p>
+<div class="mindmap">
+<ul>
+<li><span class="n l0">中断</span>
+  <ul>
+    <li><a class="n l1" href="#1">是什么<span class="tag">事件驱动</span></a>
+      <ul>
+        <li><a class="n" href="#1-1">相对轮询：低延迟 / 低功耗</a></li>
+        <li><a class="n hot" href="#1-2">完整时间线<span class="tag">置位→仲裁→ISR→清除</span></a></li>
+        <li><a class="n" href="#1-3">术语：Pending / Active / Mask</a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#2">分类<span class="tag">六个维度</span></a>
+      <ul>
+        <li><a class="n" href="#2-1">来源：内部 / 外部</a></li>
+        <li><a class="n" href="#2-2">可屏蔽 IRQ / 不可屏蔽 NMI</a></li>
+        <li><a class="n hot" href="#2-3">触发：电平 / 边沿</a></li>
+        <li><a class="n" href="#2-4">向量化 / 非向量化</a></li>
+        <li><a class="n" href="#2-5">安全域：Secure / Non-secure</a></li>
+        <li><a class="n risk" href="#2-6">异常 vs 中断<span class="tag">同步 / 异步</span></a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#3">层级<span class="tag">每层都有 EN / MASK</span></a>
+      <ul>
+        <li><a class="n" href="#3-1">L0 源级<span class="tag">事件捕获 + 单源 EN</span></a></li>
+        <li><a class="n hot" href="#3-2">L1 模块级<span class="tag">RAW/MASK/STATUS</span></a></li>
+        <li><a class="n" href="#3-3">L2 子系统聚合<span class="tag">或树 + 二级查询</span></a></li>
+        <li><a class="n hot" href="#3-4">L3 控制器<span class="tag">GIC/PLIC/NVIC 优先级</span></a></li>
+        <li><a class="n" href="#3-5">L4 CPU 全局<span class="tag">CPSR.I / mstatus.MIE</span></a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#5">源类型<span class="tag">电平还是脉冲</span></a>
+      <ul>
+        <li><a class="n hot" href="#5">电平型<span class="tag">条件不消失就一直拉</span></a></li>
+        <li><a class="n hot" href="#6">脉冲/边沿型<span class="tag">一拍事件 · 必须锁存</span></a></li>
+        <li><a class="n risk" href="#6">脉冲未锁存 → 丢中断</a></li>
+        <li><a class="n" href="#8">电平↔脉冲转换电路</a></li>
+        <li><a class="n risk" href="#9">跨时钟域 / 抖动 / 毛刺</a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#10">清除<span class="tag">软件 / 硬件 / 自清</span></a>
+      <ul>
+        <li><a class="n hot" href="#10-1">W1C 写 1 清<span class="tag">主流推荐</span></a></li>
+        <li><a class="n risk" href="#10-2">读清除 RC<span class="tag">调试器一读就丢</span></a></li>
+        <li><a class="n" href="#10-3">硬件自清除<span class="tag">读 FIFO 即清</span></a></li>
+        <li><a class="n" href="#10-4">电平型：根因消失才清</a></li>
+        <li><a class="n" href="#10-5">EOI / 控制器侧</a></li>
+        <li><a class="n risk" href="#11-1">清与置同拍竞争<span class="tag">置位优先</span></a></li>
+        <li><a class="n risk" href="#11-3">写缓冲 → ISR 重入</a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#13">实现与验证</a>
+      <ul>
+        <li><a class="n" href="#12">可综合参考实现</a></li>
+        <li><a class="n risk" href="#13">典型 Bug 清单</a></li>
+        <li><a class="n" href="#14">验证要点与覆盖率</a></li>
+        <li><a class="n" href="#15">签核清单</a></li>
+      </ul>
+    </li>
+  </ul>
+</li>
+</ul>
+<div class="mm-legend">
+<span class="k-hot">工业界常用</span>
+<span class="k-risk">风险点 / 陷阱</span>
+<span class="k-norm">一般选项</span>
+</div>
+</div>
+
+<h2 id="1">1. 什么是中断</h2>
+<p><strong>中断（Interrupt）</strong>是硬件向处理器发起的<strong>异步通知机制</strong>：某个模块检测到需要软件介入的事件（数据到达、传输完成、错误发生、定时到期），通过一根电信号（或一条消息）告诉 CPU「停下手头的事，来处理我」。CPU 在当前指令边界保存现场，跳转到对应的中断服务程序（ISR），处理完再恢复现场继续。</p>
+<p>从数字设计的角度看，中断就是一条<strong>从事件产生点一路传播到 CPU 的控制通路</strong>，这条通路上布满了捕获逻辑、锁存器、使能位、屏蔽位、优先级仲裁和清除逻辑。本文要讲的就是这条通路的每一个环节。</p>
+
+<h3 id="1-1">1.1 中断 vs 轮询</h3>
+<table>
+<tr><th>维度</th><th>轮询 Polling</th><th>中断 Interrupt</th></tr>
+<tr><td>响应延迟</td><td>最坏等于一个轮询周期，不确定</td><td>硬件通路延迟，可做到几十 ns 级</td></tr>
+<tr><td>CPU 占用</td><td>空转读寄存器，浪费带宽</td><td>无事件时 CPU 可执行其他任务或进低功耗</td></tr>
+<tr><td>功耗</td><td>差（CPU 必须保持唤醒）</td><td>好（中断可作为唤醒源，见下）</td></tr>
+<tr><td>实现复杂度</td><td>低，只需状态寄存器</td><td>高：锁存、屏蔽、优先级、清除、CDC 全都要做</td></tr>
+<tr><td>适用场景</td><td>事件频率极高且稳定（如满速 DMA 搬运中途）</td><td>事件稀疏、突发、不可预测</td></tr>
+</table>
+<div class="note">
+<p>实际芯片里两者并存：同一个状态寄存器既挂到中断通路上，也允许软件直接轮询。高吞吐场景常用「<strong>中断 + 批处理</strong>」或「<strong>中断聚合（interrupt coalescing）</strong>」——攒够 N 个事件或超时 T 再报一次中断，避免中断风暴把 CPU 淹掉。</p>
+</div>
+
+<h3 id="1-2">1.2 一次中断的完整时间线</h3>
+<div class="diagram">  ① 事件发生        ② 捕获置位          ③ 逐级放行           ④ 仲裁/向量
+ ┌──────────┐    ┌───────────────┐   ┌──────────────┐   ┌──────────────┐
+ │ FIFO 满  │───▶│ raw_status[3] │──▶│ &amp; ~mask[3]   │──▶│ GIC/PLIC     │
+ │ UART RX  │    │   锁存为 1    │   │ &amp; module_en  │   │ 优先级比较   │
+ └──────────┘    └───────────────┘   └──────────────┘   └──────┬───────┘
+                                                               │ IRQ 线
+                                                               ▼
+  ⑧ 返回          ⑦ 清中断           ⑥ 执行 ISR         ⑤ CPU 取向量
+ ┌──────────┐    ┌───────────────┐   ┌──────────────┐   ┌──────────────┐
+ │ 恢复现场 │◀───│ 写 1 清 W1C   │◀──│ 读 status    │◀──│ 保存现场     │
+ │ eret     │    │ + EOI 通知    │   │ 读数据/排错  │   │ 跳 ISR 入口  │
+ └──────────┘    └───────────────┘   └──────────────┘   └──────────────┘</div>
+<p>这八步中，硬件设计师负责 ①②③④ 和 ⑦ 的硬件侧，软件负责 ⑤⑥⑦⑧ 的软件侧。<strong>绝大多数中断 Bug 出在 ② 的捕获方式（电平还是脉冲）和 ⑦ 的清除时序上</strong>——这正是本文第四、第五部分的重点。</p>
+
+<h3 id="1-3">1.3 关键术语</h3>
+<table>
+<tr><th>术语</th><th>含义</th><th>典型寄存器名</th></tr>
+<tr><td><strong>Raw / Pending</strong></td><td>事件已发生并被锁存，<strong>未经屏蔽</strong>的原始状态</td><td><code>INT_RAW</code>、<code>ISR</code>、<code>IPR</code></td></tr>
+<tr><td><strong>Enable</strong></td><td>允许该源参与中断上报（高有效）</td><td><code>INT_EN</code>、<code>IER</code>、<code>ISENABLER</code></td></tr>
+<tr><td><strong>Mask</strong></td><td>屏蔽该源（高有效为屏蔽，语义与 Enable 相反）</td><td><code>INT_MASK</code>、<code>IMR</code></td></tr>
+<tr><td><strong>Masked / Status</strong></td><td>屏蔽后的有效中断状态，<code>raw &amp; en</code></td><td><code>INT_STATUS</code>、<code>MIS</code></td></tr>
+<tr><td><strong>Clear</strong></td><td>清除 pending 位的写端口</td><td><code>INT_CLR</code>、<code>ICR</code></td></tr>
+<tr><td><strong>Active</strong></td><td>控制器已把该中断送给 CPU，ISR 正在执行中</td><td>GIC 的 Active 状态</td></tr>
+<tr><td><strong>EOI</strong></td><td>End Of Interrupt，软件通知控制器本次服务结束</td><td><code>GICC_EOIR</code></td></tr>
+<tr><td><strong>向量 Vector</strong></td><td>中断号到 ISR 入口地址的映射</td><td>向量表 / <code>mtvec</code></td></tr>
+<tr><td><strong>中断延迟</strong></td><td>事件发生到 ISR 第一条指令执行的时间</td><td>—</td></tr>
+<tr><td><strong>中断风暴</strong></td><td>中断频率高到 CPU 无法退出 ISR，系统失去响应</td><td>—</td></tr>
+</table>
+
+<div class="part" id="P2">
+<div class="pn">第 二 部 分</div>
+<h2>中断的分类</h2>
+<p class="pd">中断没有唯一的分类法，不同维度回答不同问题。下面六个维度分别决定了：接到哪里、能不能关、怎么捕获、怎么找 ISR、谁有权访问、以及它到底是不是中断。</p>
+</div>
+
+<h2 id="2">2. 中断的分类</h2>
+<div class="mindmap">
+<ul>
+<li><span class="n l0">分类维度</span>
+  <ul>
+    <li><a class="n l1" href="#2-1">按来源</a>
+      <ul>
+        <li><span class="n">内部外设<span class="tag">UART/DMA/Timer</span></span></li>
+        <li><span class="n">外部引脚<span class="tag">GPIO/专用 IRQ pin</span></span></li>
+        <li><span class="n">软件触发<span class="tag">SGI / 写寄存器</span></span></li>
+        <li><span class="n">核间 IPI<span class="tag">多核</span></span></li>
+        <li><span class="n">消息中断 MSI<span class="tag">PCIe 写内存</span></span></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#2-2">按可否屏蔽</a>
+      <ul>
+        <li><span class="n">可屏蔽 IRQ</span></li>
+        <li><span class="n risk">不可屏蔽 NMI<span class="tag">看门狗/致命错误</span></span></li>
+        <li><span class="n">快速中断 FIQ<span class="tag">ARM</span></span></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#2-3">按触发方式</a>
+      <ul>
+        <li><span class="n hot">电平触发<span class="tag">高/低有效</span></span></li>
+        <li><span class="n hot">边沿触发<span class="tag">上升/下降/双沿</span></span></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#2-4">按向量化</a>
+      <ul>
+        <li><span class="n">向量化<span class="tag">硬件给入口</span></span></li>
+        <li><span class="n">非向量化<span class="tag">软件查状态</span></span></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#2-5">按安全/特权</a>
+      <ul>
+        <li><span class="n">Secure / Non-secure</span></li>
+        <li><span class="n">M / S / U 模式<span class="tag">RISC-V</span></span></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#2-6">同步 vs 异步</a>
+      <ul>
+        <li><span class="n">异常/陷阱<span class="tag">同步 · 指令引起</span></span></li>
+        <li><span class="n">中断<span class="tag">异步 · 外部事件</span></span></li>
+      </ul>
+    </li>
+  </ul>
+</li>
+</ul>
+</div>
+
+<h3 id="2-1">2.1 按来源：内部 / 外部 / 软件 / 核间 / 消息</h3>
+<table>
+<tr><th>类别</th><th>举例</th><th>设计要点</th></tr>
+<tr><td><strong>片内外设中断</strong></td><td>UART RX 非空、SPI 传输完成、DMA 通道结束、Timer 溢出、ADC 转换完成</td><td>与 CPU 常在同一或相关时钟域；数量最多，必须分级聚合</td></tr>
+<tr><td><strong>外部引脚中断</strong></td><td>GPIO 中断、专用 <code>nIRQ</code> 引脚、PMIC 告警、按键</td><td><strong>必须</strong>去抖 + 同步（见 <a href="#9">§9</a>）；极性可配置；常用作低功耗唤醒源</td></tr>
+<tr><td><strong>软件中断</strong></td><td>ARM GIC 的 SGI、RISC-V 的 <code>MSIP</code>、写 <code>INT_FORCE</code> 寄存器</td><td>调度、任务切换、驱动自测；硬件上就是一个可写的 pending 位</td></tr>
+<tr><td><strong>核间中断 IPI</strong></td><td>多核 cache 维护、TLB shootdown、调度唤醒</td><td>需要每核独立的 pending/清除通路，注意多核同时写的原子性</td></tr>
+<tr><td><strong>消息中断 MSI/MSI-X</strong></td><td>PCIe 设备通过写一个特定地址来"发中断"</td><td>没有物理 IRQ 线，中断变成一次写事务；天然支持大量中断号；<strong>要注意写事务与数据的顺序性</strong></td></tr>
+<tr><td><strong>错误 / 安全中断</strong></td><td>ECC 双比特错、总线 decode error、温度过高、电压跌落</td><td>通常走 NMI 或独立高优先级通路，不可被普通屏蔽关掉</td></tr>
+<tr><td><strong>调试中断</strong></td><td>断点、watchpoint、halt 请求</td><td>独立通路，优先级最高，与功能中断隔离</td></tr>
+</table>
+<div class="warn">
+<p><strong>MSI 的经典坑</strong>：设备先写数据到内存、再写 MSI 地址发中断。如果两条写走了不同路径或被重排，CPU 进 ISR 时可能读到<strong>旧数据</strong>。解决方法是在发 MSI 前插入屏障 / 等待写完成响应，或者 ISR 里先读一次设备寄存器做"push flush"。</p>
+</div>
+
+<h3 id="2-2">2.2 按可否屏蔽：可屏蔽 / 不可屏蔽</h3>
+<table>
+<tr><th>类型</th><th>能否被软件关掉</th><th>典型用途</th><th>设计注意</th></tr>
+<tr><td><strong>可屏蔽中断 IRQ</strong></td><td>能，各级 mask / 全局开关都可关</td><td>绝大多数功能中断</td><td>关中断期间事件必须被<strong>锁存</strong>，不能丢</td></tr>
+<tr><td><strong>不可屏蔽中断 NMI</strong></td><td>不能（或只能在极早期配置阶段锁死）</td><td>看门狗超时、致命硬件错误、掉电告警</td><td>不能被 pending 排队淹没；ISR 必须极短；<strong>清除通路要独立</strong>，不能依赖被卡住的总线</td></tr>
+<tr><td><strong>快速中断 FIQ</strong></td><td>能，但有独立开关和更高优先级</td><td>ARM 上的低延迟通路（有影子寄存器省去压栈）</td><td>通常只分配给一个源，否则失去"快"的意义</td></tr>
+</table>
+<div class="bad">
+<p><strong>NMI 不等于"不用清除"。</strong>NMI 同样需要清除机制，否则电平型 NMI 会导致 CPU 刚从 ISR 返回就立刻再次进入，形成死循环，连调试器都连不上。常见做法：NMI 源做成<strong>边沿捕获 + 独立 W1C</strong>，且清除寄存器挂在一条简单的、不依赖主总线的 APB 上。</p>
+</div>
+
+<h3 id="2-3">2.3 按触发方式：电平 / 边沿</h3>
+<p>这是<strong>硬件设计中最关键的分类维度</strong>，直接决定捕获电路怎么写、中断会不会丢、怎么清除。这里先给结论表，详细展开见 <a href="#5">§5</a>～<a href="#8">§8</a>。</p>
+<table>
+<tr><th>触发方式</th><th>判定条件</th><th>是否需要锁存</th><th>清除方式</th></tr>
+<tr><td><strong>高电平触发</strong></td><td><code>src == 1</code> 持续有效</td><td>可不锁存（源自带保持）</td><td>根因消失后自动撤销</td></tr>
+<tr><td><strong>低电平触发</strong></td><td><code>src == 0</code>，多用于开漏共享 <code>nIRQ</code></td><td>同上</td><td>同上</td></tr>
+<tr><td><strong>上升沿触发</strong></td><td><code>src</code> 由 0→1 的那一拍</td><td><strong>必须锁存</strong></td><td>软件 W1C / 读清 / 自清</td></tr>
+<tr><td><strong>下降沿触发</strong></td><td><code>src</code> 由 1→0 的那一拍</td><td><strong>必须锁存</strong></td><td>同上</td></tr>
+<tr><td><strong>双沿触发</strong></td><td>任意跳变</td><td><strong>必须锁存</strong></td><td>同上；常用于编码器、低功耗唤醒</td></tr>
+</table>
+<div class="good">
+<p>好的 IP 设计会把触发方式做成<strong>每源可配置</strong>（<code>INT_TYPE</code> + <code>INT_POLARITY</code> 两个寄存器），GPIO 控制器几乎都这么做。片内外设则由设计者在 spec 中<strong>逐条明确写死</strong>，并在寄存器手册中标注——绝不能让软件去猜。</p>
+</div>
+
+<h3 id="2-4">2.4 按向量化程度</h3>
+<table>
+<tr><th>方式</th><th>硬件做什么</th><th>优缺点</th></tr>
+<tr><td><strong>非向量化</strong></td><td>只给 CPU 一根 IRQ 线，软件进统一入口后读状态寄存器判断是谁</td><td>硬件最简单；延迟大（要读几次寄存器）；中断源多时软件开销明显</td></tr>
+<tr><td><strong>向量化</strong></td><td>控制器把中断号 / ISR 入口地址直接给 CPU</td><td>延迟低；需要向量表和控制器支持（NVIC、GIC、CLIC）</td></tr>
+<tr><td><strong>混合（两级）</strong></td><td>顶层向量化到"某模块"，模块内部仍需读状态分辨具体子源</td><td><strong>实际 SoC 最常见</strong>；是层级结构的直接产物，见 <a href="#3-3">§3.3</a></td></tr>
+</table>
+
+<h3 id="2-5">2.5 按安全域 / 特权级</h3>
+<table>
+<tr><th>划分</th><th>机制</th><th>设计要点</th></tr>
+<tr><td><strong>Secure / Non-secure</strong></td><td>ARM TrustZone：GIC 的 Group0/Group1S/Group1NS</td><td>非安全世界<strong>不能读写</strong>安全中断的 enable/pending 寄存器，需在寄存器访问层做过滤</td></tr>
+<tr><td><strong>M / S / U 模式</strong></td><td>RISC-V：<code>mie/mip</code>、<code>sie/sip</code>，可委托（<code>mideleg</code>）</td><td>委托关系要与 PLIC 的 context 划分一致</td></tr>
+<tr><td><strong>Hypervisor / 虚拟中断</strong></td><td>GICv3 的 LR 列表寄存器、virtual IRQ</td><td>虚拟机看到的是"虚拟 pending"，清除路径更长</td></tr>
+</table>
+
+<h3 id="2-6">2.6 异常 / 陷阱 / 中断的区别</h3>
+<table>
+<tr><th>名称</th><th>同步性</th><th>触发者</th><th>举例</th><th>能否屏蔽</th></tr>
+<tr><td><strong>中断 Interrupt</strong></td><td>异步</td><td>外部硬件事件</td><td>UART 收到数据、定时器到期</td><td>一般可以</td></tr>
+<tr><td><strong>异常 Exception / Fault</strong></td><td>同步</td><td>当前指令本身</td><td>除零、非法指令、缺页、对齐错</td><td>不能</td></tr>
+<tr><td><strong>陷阱 Trap / 系统调用</strong></td><td>同步</td><td>指令主动发起</td><td><code>svc</code> / <code>ecall</code> / <code>int 0x80</code></td><td>不能</td></tr>
+<tr><td><strong>中止 Abort</strong></td><td>可同步可异步</td><td>总线/存储错误</td><td>外部存储访问失败、ECC 错</td><td>异步 abort 可屏蔽</td></tr>
+</table>
+<div class="note">
+<p><strong>对硬件设计的意义</strong>：同步异常由 CPU 内部产生，不需要你设计捕获和清除逻辑；<strong>你要设计的是异步中断通路</strong>。但异步 abort 是个灰色地带——它由你的总线/存储子系统产生，却走异常入口，这类通路的 pending 和清除同样要在 SoC 层定义清楚。</p>
+</div>
+<div class="part" id="P3">
+<div class="pn">第 三 部 分</div>
+<h2>中断的层级与使能屏蔽</h2>
+<p class="pd">一颗 SoC 有几百上千个中断事件，CPU 只有几根 IRQ 线。中间必然是一棵<strong>收敛的树</strong>。树的每一层都有自己的使能位和屏蔽位——这是中断调试最容易踩坑的地方：任何一层关着，中断就上不去。</p>
+</div>
+
+<h2 id="3">3. 中断的层级结构</h2>
+<div class="diagram">  L0 源级                L1 模块级            L2 子系统级        L3 控制器级      L4 CPU 级
+ ┌──────────┐          ┌──────────────┐      ┌───────────┐     ┌──────────┐   ┌──────────┐
+ │ 事件捕获  │  raw[n]  │  RAW 寄存器  │ int  │  聚合 OR  │ irq │ GIC/PLIC │   │  CPSR.I  │
+ │ 边沿/电平 │ ───────▶ │      &amp;       │ ───▶ │     &amp;     │────▶│ 优先级   │──▶│ mstatus  │──▶ 取向量
+ │ + src_en  │          │  ~MASK/EN    │      │ SUB_EN    │     │ + EN/PRI │   │  .MIE    │
+ └──────────┘          └──────────────┘      └───────────┘     └──────────┘   └──────────┘
+   每源使能               每位 mask            子系统使能        每号 enable    全局开关
+   (有时省略)             + 状态寄存器         + 二级状态        + 优先级门限   + 优先级门限
+
+   ↑ 事件在这里被"记住"（pending），越往上越只是"放行/拦截"，一般不再二次锁存</div>
+
+<p>下图是一个<strong>具体 IP 的三级中断树实例</strong>：最底层是一个个物理中断源，逐级经过"使能 EN + 屏蔽 mask"两个开关向上合并，最终收敛成一根送出芯片（或送往 GIC/PLIC）的中断线。<strong>每一级的方框就是一道闸门，任意一道关着，下面的事件都上不去</strong>。</p>
+
+<div class="svgfig">
+<svg viewBox="0 0 960 706" width="100%" role="img" aria-label="三级中断树层级示意图">
+  <defs>
+    <marker id="ar-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="#cf222e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="706" fill="#ffffff"/>
+  <!-- 层级分隔背景条 -->
+  <rect x="0" y="20"  width="960" height="92"  fill="#f6f8fa"/>
+  <rect x="0" y="236" width="960" height="78"  fill="#f6f8fa"/>
+  <rect x="0" y="420" width="960" height="78"  fill="#f6f8fa"/>
+  <rect x="0" y="596" width="960" height="78"  fill="#f6f8fa"/>
+
+  <!-- 左侧层级标签 -->
+  <g font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" font-size="14" font-weight="600" fill="#1f2328">
+    <text x="24" y="72">顶层中断输出</text>
+    <text x="24" y="190">中断合并</text>
+    <text x="24" y="282">第一级中断</text>
+    <text x="24" y="465">第二级中断</text>
+    <text x="24" y="641">第三级中断</text>
+  </g>
+
+  <!-- 连线 -->
+  <g stroke="#6b7580" stroke-width="1.6" fill="none">
+    <path d="M480,100 L480,160"/>
+    <path d="M480,208 L480,236 M371,236 L638,236 M371,236 L371,260 M538,236 L538,260 M638,236 L638,260"/>
+    <path d="M371,298 L371,326 M285,326 L495,326 M285,326 L285,354 M495,326 L495,354"/>
+    <path d="M285,392 L285,442"/>
+    <path d="M495,392 L495,442"/>
+    <path d="M285,480 L285,530"/>
+    <path d="M285,568 L285,618"/>
+  </g>
+  <!-- 连线上的"收敛点"小圆 -->
+  <g fill="#ffffff" stroke="#6b7580" stroke-width="1.4">
+    <circle cx="480" cy="130" r="7"/><circle cx="480" cy="222" r="7"/>
+    <circle cx="371" cy="312" r="7"/><circle cx="285" cy="417" r="7"/>
+    <circle cx="495" cy="417" r="7"/><circle cx="285" cy="505" r="7"/>
+    <circle cx="285" cy="593" r="7"/>
+  </g>
+  <g stroke="#6b7580" stroke-width="1.4">
+    <path d="M476,130 L484,130"/><path d="M476,222 L484,222"/>
+    <path d="M367,312 L375,312"/><path d="M281,417 L289,417"/>
+    <path d="M491,417 L499,417"/><path d="M281,505 L289,505"/>
+    <path d="M281,593 L289,593"/>
+  </g>
+
+  <g font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" text-anchor="middle">
+    <!-- 顶层 IO 管脚 -->
+    <rect x="400" y="36" width="160" height="64" rx="4" fill="#4593e8" stroke="#0969da" stroke-width="1.5"/>
+    <text x="480" y="76" font-size="21" font-weight="700" fill="#ffffff">IO 管脚 / IRQ</text>
+
+    <!-- 中断合并 -->
+    <rect x="286" y="160" width="388" height="48" rx="3" fill="#ffffff" stroke="#1f2328" stroke-width="2.2"/>
+    <text x="480" y="191" font-size="17" font-weight="700" fill="#1f2328">INT_EN=ON/OFF &amp; mask=OFF</text>
+
+    <!-- 第一级 -->
+    <rect x="330" y="260" width="82" height="38" rx="3" fill="#ffffff" stroke="#1f2328" stroke-width="1.6"/>
+    <text x="371" y="284" font-size="14" fill="#1f2328">中断 1</text>
+    <rect x="500" y="260" width="76" height="38" rx="3" fill="#ffffff" stroke="#1f2328" stroke-width="1.6"/>
+    <text x="538" y="284" font-size="14" fill="#1f2328">中断 2</text>
+    <rect x="600" y="260" width="76" height="38" rx="3" fill="#ffffff" stroke="#1f2328" stroke-width="1.6"/>
+    <text x="638" y="284" font-size="14" fill="#1f2328">中断 3</text>
+
+    <!-- 第二级闸门 -->
+    <rect x="190" y="354" width="190" height="38" rx="3" fill="#ffffff" stroke="#1f2328" stroke-width="1.6"/>
+    <text x="285" y="378" font-size="14" fill="#1f2328">mask=OFF &amp; EN=ON</text>
+    <rect x="400" y="354" width="190" height="38" rx="3" fill="#ffffff" stroke="#1f2328" stroke-width="1.6"/>
+    <text x="495" y="378" font-size="14" fill="#1f2328">mask=OFF &amp; EN=ON</text>
+
+    <!-- 第二级源（锁存点） -->
+    <rect x="240" y="436" width="90" height="50" rx="3" fill="#dafbe1" stroke="#2da44e" stroke-width="2"/>
+    <text x="285" y="458" font-size="14" fill="#1f2328">中断源 1</text>
+    <text x="285" y="476" font-size="10.5" fill="#1a7f37">电平型 · RAW 锁存</text>
+    <rect x="450" y="436" width="90" height="50" rx="3" fill="#dafbe1" stroke="#2da44e" stroke-width="2"/>
+    <text x="495" y="458" font-size="14" fill="#1f2328">中断源 2</text>
+    <text x="495" y="476" font-size="10.5" fill="#1a7f37">脉冲型 · RAW 锁存</text>
+
+    <!-- 第三级闸门 -->
+    <rect x="190" y="530" width="190" height="38" rx="3" fill="#ffffff" stroke="#1f2328" stroke-width="1.6"/>
+    <text x="285" y="554" font-size="14" fill="#1f2328">mask=OFF &amp; EN=ON</text>
+
+    <!-- 第三级源（锁存点） -->
+    <rect x="240" y="612" width="90" height="50" rx="3" fill="#dafbe1" stroke="#2da44e" stroke-width="2"/>
+    <text x="285" y="634" font-size="14" fill="#1f2328">中断源 1</text>
+    <text x="285" y="652" font-size="10.5" fill="#1a7f37">电平型 · RAW 锁存</text>
+  </g>
+
+  <!-- 右侧寄存器说明 -->
+  <g font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" font-size="13.5" fill="#1f2328">
+    <rect x="606" y="432" width="330" height="134" rx="6" fill="#ddf4ff" stroke="#9fd0fb"/>
+    <text x="622" y="456" font-weight="700">每一级中断对应的寄存器：</text>
+    <text x="622" y="480">1. 对应中断源的 mask 和对应的使能 EN</text>
+    <text x="622" y="504">2. 对应中断的状态 status</text>
+    <text x="622" y="528">3. 对应中断的历史状态记录</text>
+    <text x="638" y="548">status_history 和 CNT 计数</text>
+  </g>
+
+  <!-- 「仅闸门，不锁存」标注 -->
+  <g font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" font-size="12.5">
+    <path d="M700,184 L682,184" stroke="#cf222e" stroke-width="1.4" fill="none"
+          marker-end="url(#ar-red)"/>
+    <text x="706" y="181" fill="#cf222e" font-weight="700">合并层只是组合 OR + 与门</text>
+    <text x="706" y="199" fill="#cf222e">严禁在此二次锁存（见 §3.3）</text>
+  </g>
+
+  <!-- 图例 -->
+  <g font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" font-size="12.5" fill="#656d76">
+    <line x1="24" y1="672" x2="936" y2="672" stroke="#d1d9e0"/>
+    <rect x="24"  y="680" width="22" height="13" rx="2" fill="#dafbe1" stroke="#2da44e" stroke-width="1.6"/>
+    <text x="54"  y="691">锁存点（RAW pending，全链路只此一层）</text>
+    <rect x="330" y="680" width="22" height="13" rx="2" fill="#ffffff" stroke="#1f2328" stroke-width="1.4"/>
+    <text x="360" y="691">闸门（EN/mask 与门，纯组合）</text>
+    <circle cx="610" cy="687" r="6" fill="#ffffff" stroke="#6b7580" stroke-width="1.4"/>
+    <path d="M606,687 L614,687" stroke="#6b7580" stroke-width="1.4"/>
+    <text x="624" y="691">OR 收敛点</text>
+    <rect x="716" y="680" width="22" height="13" rx="2" fill="#ddf4ff" stroke="#9fd0fb"/>
+    <text x="746" y="691">软件可见寄存器</text>
+  </g>
+</svg>
+<p class="cap">图 3-1　三级中断树：源 → 逐级 EN/mask 闸门 → 逐级合并 → 顶层 IRQ</p>
+</div>
+
+<table>
+<tr><th>图中元素</th><th>对应的硬件</th><th>对应的寄存器位</th></tr>
+<tr><td><strong>中断源 1/2</strong>（叶子）</td><td>实际事件产生点：FIFO 空/满、传输完成、过流比较器、GPIO 引脚</td><td><code>INT_RAW[n]</code>（pending 锁存位）</td></tr>
+<tr><td><strong>mask=OFF &amp; EN=ON</strong>（闸门）</td><td>一个与门。<code>EN</code> 为正逻辑使能，<code>mask</code> 为负逻辑屏蔽，两者都"放行"事件才能往上走</td><td><code>INT_EN[n]</code> / <code>INT_MASK[n]</code></td></tr>
+<tr><td><strong>收敛点</strong>（小圆）</td><td>纯组合 OR 树，<strong>不再二次锁存</strong></td><td>—（无寄存器）</td></tr>
+<tr><td><strong>中断 1/2/3</strong>（枝干）</td><td>一个子系统/一个 IP 聚合出来的中断，本身又是上一级的"源"</td><td><code>SUB_STATUS[k]</code> + 本级 <code>EN/mask</code></td></tr>
+<tr><td><strong>INT_EN &amp; mask</strong>（顶层）</td><td>整个模块的总开关，常见名 <code>MODULE_INT_GLOBAL_EN</code></td><td>顶层 <code>EN</code> / <code>MASK</code></td></tr>
+<tr><td><strong>IO 管脚 / IRQ</strong></td><td>送出芯片的 <code>nIRQ</code> 引脚，或送往 GIC/PLIC/NVIC 的一根线</td><td>—（可读 <code>IRQ_STATUS</code> 调试）</td></tr>
+</table>
+
+<p>图 3-1 看到的是"树的形状"，但每个绿色锁存点<strong>内部</strong>到底发生了什么？下面把其中<strong>一个中断源</strong>放大，展开从物理事件到最终 IRQ 的完整通路，以及软件写清除的反向路径。这张图对应 <a href="#12">§12</a> 的 RTL 实现。</p>
+
+<div class="svgfig">
+<svg viewBox="0 0 960 470" width="100%" role="img" aria-label="单个中断源的完整通路">
+  <defs>
+    <marker id="ar-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="#6b7580"/>
+    </marker>
+    <marker id="ar-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="#cf222e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="470" fill="#ffffff"/>
+
+  <g font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" text-anchor="middle">
+    <!-- 阶段标题 -->
+    <g font-size="12" fill="#656d76" font-weight="600">
+      <text x="88"  y="36">① 事件产生</text>
+      <text x="244" y="36">② 同步 / 去抖</text>
+      <text x="400" y="36">③ 捕获</text>
+      <text x="556" y="36">④ 锁存 pending</text>
+      <text x="712" y="36">⑤ 屏蔽</text>
+      <text x="868" y="36">⑥ 合并上报</text>
+    </g>
+
+    <!-- 主通路方框 -->
+    <rect x="24"  y="92" width="128" height="62" rx="4" fill="#ffffff" stroke="#1f2328" stroke-width="1.6"/>
+    <text x="88"  y="118" font-size="13.5" fill="#1f2328">物理事件</text>
+    <text x="88"  y="137" font-size="11" fill="#656d76">引脚 / FIFO / 比较器</text>
+
+    <rect x="180" y="92" width="128" height="62" rx="4" fill="#ffffff" stroke="#1f2328" stroke-width="1.6"/>
+    <text x="244" y="112" font-size="13.5" fill="#1f2328">两级同步器</text>
+    <text x="244" y="130" font-size="11" fill="#656d76">+ 计数型去抖</text>
+    <text x="244" y="146" font-size="10.5" fill="#0969da">仅异步源需要 §9</text>
+
+    <rect x="336" y="92" width="128" height="62" rx="4" fill="#ffffff" stroke="#1f2328" stroke-width="1.6"/>
+    <text x="400" y="112" font-size="13.5" fill="#1f2328">捕获逻辑</text>
+    <text x="400" y="130" font-size="10.5" fill="#656d76">电平直通 / 边沿检测</text>
+    <text x="400" y="146" font-size="10.5" fill="#656d76">src &amp; ~src_d</text>
+
+    <!-- 锁存点：突出 -->
+    <rect x="492" y="86" width="128" height="74" rx="4" fill="#dafbe1" stroke="#2da44e" stroke-width="2.4"/>
+    <text x="556" y="108" font-size="13.5" font-weight="700" fill="#1f2328">INT_RAW[n]</text>
+    <text x="556" y="126" font-size="11" fill="#1a7f37">D 触发器 · pending</text>
+    <text x="556" y="143" font-size="10.5" fill="#1a7f37">置位优先于清除</text>
+    <text x="556" y="156" font-size="10.5" fill="#1a7f37">全链路唯一锁存</text>
+
+    <rect x="648" y="92" width="128" height="62" rx="4" fill="#ffffff" stroke="#1f2328" stroke-width="1.6"/>
+    <text x="712" y="112" font-size="13.5" fill="#1f2328">&amp; EN / ~MASK</text>
+    <text x="712" y="130" font-size="11" fill="#656d76">纯组合与门</text>
+    <text x="712" y="146" font-size="10.5" fill="#656d76">可多层重复</text>
+
+    <rect x="804" y="92" width="128" height="62" rx="4" fill="#ddf4ff" stroke="#0969da" stroke-width="1.8"/>
+    <text x="868" y="118" font-size="13.5" font-weight="700" fill="#0a4a82">OR 树 → IRQ</text>
+    <text x="868" y="137" font-size="11" fill="#0a4a82">不锁存</text>
+  </g>
+
+  <!-- 主通路箭头 -->
+  <g stroke="#6b7580" stroke-width="1.8" fill="none" marker-end="url(#ar-g)">
+    <path d="M152,123 L176,123"/>
+    <path d="M308,123 L332,123"/>
+    <path d="M464,123 L488,123"/>
+    <path d="M620,123 L644,123"/>
+    <path d="M776,123 L800,123"/>
+  </g>
+
+  <g font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" text-anchor="middle">
+    <!-- 读出支路 -->
+    <rect x="492" y="208" width="128" height="34" rx="3" fill="#ddf4ff" stroke="#9fd0fb"/>
+    <text x="556" y="231" font-size="12.5" fill="#0a4a82">读 INT_RAW（RIS）</text>
+    <rect x="648" y="208" width="128" height="34" rx="3" fill="#ddf4ff" stroke="#9fd0fb"/>
+    <text x="712" y="231" font-size="12.5" fill="#0a4a82">读 INT_STATUS（MIS）</text>
+    <rect x="648" y="258" width="128" height="34" rx="3" fill="#ddf4ff" stroke="#9fd0fb"/>
+    <text x="712" y="281" font-size="12.5" fill="#0a4a82">写 INT_MASK / EN</text>
+
+    <!-- 清除通路 -->
+    <rect x="336" y="330" width="284" height="48" rx="4" fill="#ffebe9" stroke="#cf222e" stroke-width="1.8"/>
+    <text x="478" y="350" font-size="13.5" font-weight="700" fill="#cf222e">软件写 INT_CLR[n] = 1（W1C）</text>
+    <text x="478" y="368" font-size="11" fill="#cf222e">只有 APB ACCESS 相位的一拍有效</text>
+  </g>
+
+  <!-- 支路连线 -->
+  <g stroke="#9fd0fb" stroke-width="1.5" fill="none" marker-end="url(#ar-g)">
+    <path d="M556,160 L556,206"/>
+    <path d="M712,154 L712,206"/>
+  </g>
+  <g stroke="#9fd0fb" stroke-width="1.5" fill="none">
+    <path d="M712,258 L712,244"/>
+  </g>
+
+  <!-- 清除反向箭头：指回锁存点 -->
+  <g stroke="#cf222e" stroke-width="1.8" fill="none" stroke-dasharray="6 4" marker-end="url(#ar-c)">
+    <path d="M478,330 L478,250 L540,250 L540,164"/>
+  </g>
+
+  <g font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" font-size="12" fill="#cf222e">
+    <text x="300" y="282">清除只作用于锁存点</text>
+    <text x="300" y="300">不作用于闸门和 OR 树</text>
+  </g>
+
+  <!-- 底部结论条 -->
+  <g font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+    <rect x="24" y="404" width="912" height="46" rx="6" fill="#f6f8fa" stroke="#d1d9e0"/>
+    <text x="40" y="423" font-size="12.5" fill="#1f2328">
+      <tspan font-weight="700">电平型</tspan>：③ 直通，④ 的 pending 跟随根因；根因不消失，清了也会立刻重新置位 → 必须靠 mask 止损。
+    </text>
+    <text x="40" y="441" font-size="12.5" fill="#1f2328">
+      <tspan font-weight="700">脉冲型</tspan>：③ 做边沿检测，④ <tspan font-weight="700">必须</tspan>锁存，否则一拍脉冲过去中断就永久丢失；清除后需等下一次事件才会再置位。
+    </text>
+  </g>
+</svg>
+<p class="cap">图 3-2　单个中断源的完整通路：事件 → 同步 → 捕获 → 锁存 → 屏蔽 → 合并，以及 W1C 清除的反向路径</p>
+</div>
+
+<div class="warn">
+<p><strong>对照两张图理解中断调试</strong>：图 3-2 的 ④ 绿色锁存点，就是图 3-1 里每一个绿色叶子节点的内部展开。调试时"读 RAW 有没有"就是在探测 ④，"读 STATUS 有没有"就是在探测 ⑤ 之后。两者不一致，问题必然出在 mask；RAW 本身就没有，问题必然在 ①～③（事件没产生、同步丢了、或捕获极性配错）。</p>
+</div>
+
+<div class="note">
+<p><strong>为什么每一级都要有 EN 和 mask？</strong></p>
+<ul>
+<li><strong>粒度控制</strong>：软件既要能一次性关掉整个 IP 的中断（顶层），也要能只关掉某个具体子源（叶子），而不影响同模块的其他源。</li>
+<li><strong>分层调试</strong>：出问题时逐级读 status 就能定位"卡在哪一层"，见 <a href="#4-3">§4.3</a> 的排查表。</li>
+<li><strong>多主控隔离</strong>：不同 CPU/不同安全域可以各自持有不同层级的开关，互不干扰。</li>
+</ul>
+<p>但要牢记：<strong>闸门可以有很多层，锁存只能有一层</strong>（在叶子的 <code>INT_RAW</code>）。中间任何一级如果擅自加了寄存器把聚合结果锁住，就会出现"清了叶子，上层 IRQ 不撤销"的中断风暴，见 <a href="#3-3">§3.3</a>。</p>
+</div>
+
+<div class="good">
+<p><strong>核心原则</strong>：<strong>锁存只做一次，屏蔽可以做多次</strong>。事件在 L0/L1 被锁存成 pending 位，往上各层只是组合与门（放行/拦截）。这样无论上层屏蔽开关怎么动，事件都不会丢——屏蔽打开后 pending 仍在，中断会立刻重新上报。</p>
+</div>
+
+<h3 id="3-1">3.1 L0 源级：事件捕获与单源使能</h3>
+<p>最底层，紧贴事件产生点。职责是把物理事件变成一个干净的、同步到寄存器时钟域的、<strong>可被锁存</strong>的 1 bit。</p>
+<table>
+<tr><th>要素</th><th>说明</th></tr>
+<tr><td><strong>捕获方式</strong></td><td>电平直通 / 上升沿 / 下降沿 / 双沿，见 <a href="#5">§5</a>～<a href="#6">§6</a></td></tr>
+<tr><td><strong>极性配置</strong></td><td><code>INT_POLARITY[n]</code>，外部引脚中断必须有</td></tr>
+<tr><td><strong>去抖 / 滤波</strong></td><td>机械按键、慢速外部信号需要数字滤波计数器</td></tr>
+<tr><td><strong>同步器</strong></td><td>异步源必须两级同步后再捕获</td></tr>
+<tr><td><strong>源级使能</strong><span class="tag"></span></td><td><code>SRC_EN[n]</code>：关掉后连 raw 位都不置。<strong>注意这与 mask 语义不同</strong>——mask 只挡上报、raw 仍记录；src_en 关掉则事件彻底不记录</td></tr>
+</table>
+<div class="warn">
+<p><strong>源级使能是双刃剑</strong>。它能彻底避免无用事件占用 pending（省功耗、避免风暴），但也意味着<strong>关闭期间的事件永久丢失</strong>，软件打开后无法得知期间发生过什么。设计时必须在手册中明确标注该位的语义，否则软件会误以为是普通 mask。大多数设计<strong>只保留 mask，不做 src_en</strong>，除非有明确的功耗或风暴需求。</p>
+</div>
+
+<h3 id="3-2">3.2 L1 模块级：RAW / MASK / STATUS / CLEAR 四件套</h3>
+<p>这是<strong>每个 IP 内部的标准中断寄存器组</strong>，也是设计者最常亲手写的一层。一个 32 位寄存器可容纳 32 个子中断源。</p>
+<table>
+<tr><th>寄存器</th><th>访问属性</th><th>含义</th></tr>
+<tr><td><code>INT_RAW</code></td><td>RO（或 W1C）</td><td>原始 pending，不受 mask 影响。调试用，也是软件轮询入口</td></tr>
+<tr><td><code>INT_EN</code> / <code>INT_MASK</code></td><td>RW</td><td>每位使能或屏蔽，复位默认<strong>全屏蔽</strong></td></tr>
+<tr><td><code>INT_STATUS</code></td><td>RO</td><td><code>INT_RAW &amp; INT_EN</code>（或 <code>&amp; ~INT_MASK</code>），ISR 读这个判断干活</td></tr>
+<tr><td><code>INT_CLR</code></td><td>WO / W1C</td><td>写 1 清对应 raw 位</td></tr>
+<tr><td><code>INT_FORCE</code>（可选）</td><td>WO</td><td>软件强制置位，用于驱动自测和 DV</td></tr>
+</table>
+<div class="formula">module_int_o = | (INT_RAW &amp; INT_EN) &amp; MODULE_INT_GLOBAL_EN</div>
+<div class="note">
+<p>一些 IP 还提供一个<strong>模块总开关</strong> <code>MODULE_INT_GLOBAL_EN</code>，用于软件在重配置模块时一次性关掉该模块所有中断，而不用保存/恢复整个 mask 寄存器。这是 L1 层内的第二个屏蔽点。</p>
+</div>
+
+<h3 id="3-3">3.3 L2 子系统 / 聚合级</h3>
+<p>当中断数远多于控制器的输入端口时，需要把多个模块的中断<strong>或</strong>到一根线上，由软件进 ISR 后再读二级状态寄存器定位。</p>
+<div class="diagram">  UART0.int ─┐
+  UART1.int ─┤
+  SPI0.int  ─┼──▶ ( OR ) ──▶ &amp; SUB_EN ──▶ periph_irq ──▶ GIC SPI[37]
+  I2C0.int  ─┤        │
+  TIMER.int ─┘        └──▶ SUB_STATUS 寄存器（二级查询，RO）
+
+  ISR 流程：进入 periph_irq handler
+         → 读 SUB_STATUS 得知是 SPI0
+         → 读 SPI0.INT_STATUS 得知是 TX_DONE
+         → 处理并写 SPI0.INT_CLR</div>
+<table>
+<tr><th>该层的控制位</th><th>作用</th></tr>
+<tr><td><code>SUB_EN</code> / <code>SUB_MASK</code></td><td>整条聚合支路的使能/屏蔽</td></tr>
+<tr><td><code>SUB_STATUS</code></td><td>每 bit 对应一个下游模块，<strong>只读、不锁存</strong>（直接反映下游 int 线）</td></tr>
+</table>
+<div class="warn">
+<p><strong>聚合层千万不要再锁存。</strong>如果这一层也做了 pending 锁存，就出现了"两处 pending"：软件清了下游模块的 raw，聚合层的 pending 还在，IRQ 线不撤销，ISR 立刻重入——这是最常见的中断风暴成因之一。<strong>聚合层必须是纯组合的 OR</strong>。</p>
+</div>
+
+<h3 id="3-4">3.4 L3 控制器级：GIC / PLIC / NVIC</h3>
+<p>中断控制器负责<strong>仲裁</strong>：从几百个 pending 中选出优先级最高的一个送给 CPU，并提供分发（送给哪个核）、优先级、抢占、安全分组等能力。</p>
+<table>
+<tr><th>控制器</th><th>架构</th><th>每源控制位</th><th>全局门限</th><th>清除/结束</th></tr>
+<tr><td><strong>ARM GIC</strong></td><td>Distributor + CPU Interface + (GICv3 Redistributor)</td><td><code>ISENABLER/ICENABLER</code>、<code>IPRIORITYR</code>、<code>ICFGR</code>（电平/边沿）、<code>ITARGETSR</code>/路由</td><td><code>PMR</code> 优先级门限、<code>BPR</code> 抢占分组、<code>CTLR</code> 使能</td><td>读 <code>IAR</code> 取号（边沿型此时自动清 pending），写 <code>EOIR</code>/<code>DIR</code> 结束</td></tr>
+<tr><td><strong>RISC-V PLIC</strong></td><td>每 context（hart×特权级）独立</td><td><code>priority[i]</code>、<code>enable[context][i]</code></td><td><code>threshold[context]</code></td><td>读 <code>claim</code> 取号并清 pending，写 <code>complete</code> 结束</td></tr>
+<tr><td><strong>ARM NVIC</strong></td><td>紧耦合于 Cortex-M 内核</td><td><code>ISER/ICER</code>、<code>IPR</code>、<code>ISPR/ICPR</code>（可软件读写 pending）</td><td><code>BASEPRI</code>、<code>PRIMASK</code>、<code>FAULTMASK</code></td><td>进入 ISR 自动清 pending（边沿型），退出自动 EOI</td></tr>
+<tr><td><strong>RISC-V CLIC</strong></td><td>向量化 + 可配置电平/边沿</td><td><code>clicintie</code>、<code>clicintattr</code>（trig 字段配触发方式）、<code>clicintctl</code></td><td><code>mintthresh</code></td><td><code>clicintip</code> 可写清</td></tr>
+</table>
+<div class="note">
+<p><strong>控制器也需要知道源是电平还是边沿</strong>（GIC 的 <code>ICFGR</code>、CLIC 的 <code>trig</code>）。配错的后果：把电平源配成边沿 → 中断只报一次之后再不报；把边沿源配成电平 → 源脉冲消失后 pending 跟着消失，或清不掉反复进 ISR。<strong>这个配置必须与 RTL 实际行为严格一致，应写进集成文档并在 DV 中检查。</strong></p>
+</div>
+
+<h3 id="3-5">3.5 L4 CPU 全局级</h3>
+<table>
+<tr><th>架构</th><th>全局开关</th><th>优先级门限</th><th>说明</th></tr>
+<tr><td>ARM A/R</td><td><code>CPSR.I</code>（IRQ）、<code>CPSR.F</code>（FIQ）、<code>DAIF</code></td><td>GIC 的 <code>PMR</code></td><td>进 ISR 时硬件自动置位屏蔽同级中断</td></tr>
+<tr><td>ARM Cortex-M</td><td><code>PRIMASK</code>（关所有可配置优先级中断）、<code>FAULTMASK</code></td><td><code>BASEPRI</code>（只关低于某优先级的）</td><td><code>BASEPRI</code> 比 <code>PRIMASK</code> 更精细，RTOS 临界区常用</td></tr>
+<tr><td>RISC-V</td><td><code>mstatus.MIE</code> / <code>sstatus.SIE</code></td><td><code>mie</code> 各类别位 + PLIC threshold</td><td>进 trap 时硬件把 MIE 存到 MPIE 并清零</td></tr>
+</table>
+
+<h2 id="4">4. 使能、屏蔽与状态寄存器</h2>
+
+<h3 id="4-1">4.1 RAW / MASK / MASKED 三件套</h3>
+<p>这是中断寄存器设计的<strong>标准范式</strong>，ARM PrimeCell 系列（PL011 UART、PL022 SPI 等）几乎都遵循：</p>
+<div class="diagram">  事件 ──▶ ┌─────────┐          ┌─────────┐
+           │ RAW 位  │────┬────▶│  &amp; EN   │────▶ 上报
+           │ (锁存)  │    │     └─────────┘
+           └────▲────┘    │          │
+                │         ▼          ▼
+         CLR 写1清    RIS 可读    MIS 可读
+                    (原始状态)  (屏蔽后状态)
+
+  RIS = Raw Interrupt Status     ← 调试 / 轮询看这个
+  MIS = Masked Interrupt Status  ← ISR 看这个
+  IMSC = Interrupt Mask Set/Clear ← 使能位（PrimeCell 里是高有效=使能）
+  ICR  = Interrupt Clear Register ← W1C</div>
+<table>
+<tr><th>为什么要同时有 RAW 和 MASKED</th></tr>
+<tr><td><strong>RAW 用于调试和轮询</strong>：软件没开中断时也能查事件是否发生；出问题时能区分"事件没来"还是"事件来了被挡住"</td></tr>
+<tr><td><strong>MASKED 用于 ISR</strong>：ISR 只应处理自己使能了的源。若 ISR 直接读 RAW，会去处理那些被故意屏蔽的事件，导致行为错乱</td></tr>
+<tr><td><strong>两者都是必需的</strong>：只给一个会让软件无法区分状态，是寄存器设计的常见缺陷</td></tr>
+</table>
+
+<h3 id="4-2">4.2 enable 与 mask 的极性之争</h3>
+<table>
+<tr><th>命名</th><th>语义</th><th>复位值</th><th>有效逻辑</th></tr>
+<tr><td><code>INT_EN</code></td><td>1 = 允许上报</td><td><strong>0</strong>（默认全关）</td><td><code>raw &amp; en</code></td></tr>
+<tr><td><code>INT_MASK</code></td><td>1 = 屏蔽</td><td><strong>1</strong>（默认全屏蔽）</td><td><code>raw &amp; ~mask</code></td></tr>
+</table>
+<div class="bad">
+<p><strong>最容易出错的地方：复位默认值。</strong>无论用 EN 还是 MASK 命名，<strong>复位后必须是"中断全部关闭"</strong>。否则复位刚撤离、软件还没初始化好 ISR 和向量表，就被一个中断打进去，直接跑飞。</p>
+<p>同一颗芯片里<strong>不要混用两种极性</strong>。有的模块叫 EN、有的叫 MASK，驱动工程师迟早写反一个。团队应在寄存器规范中统一选一种。</p>
+</div>
+<div class="note">
+<p><strong>Set/Clear 分离寄存器</strong>：GIC 的 <code>ISENABLER</code>/<code>ICENABLER</code>、NVIC 的 <code>ISER</code>/<code>ICER</code> 用两个地址分别做"写 1 置位"和"写 1 清位"，好处是<strong>多核或多任务修改使能位时无需读-改-写</strong>，天然原子。强烈推荐在多核 SoC 的共享中断寄存器上采用这种形式。</p>
+</div>
+
+<h3 id="4-3">4.3 屏蔽发生在哪一级</h3>
+<p>同一个中断在到达 CPU 前可能经过 5 个屏蔽点。调试"中断上不来"时，<strong>必须逐级往上查</strong>：</p>
+<table>
+<tr><th>层级</th><th>控制位</th><th>关闭后的现象</th><th>事件是否保留</th></tr>
+<tr><td>L0 源级</td><td><code>SRC_EN</code>（若有）</td><td>连 RAW 都不置位</td><td><strong>丢失</strong></td></tr>
+<tr><td>L1 模块</td><td><code>INT_EN</code> / <code>INT_MASK</code></td><td>RAW 有、STATUS 无、IRQ 不拉</td><td>保留</td></tr>
+<tr><td>L1 模块总开关</td><td><code>MODULE_INT_EN</code></td><td>同上</td><td>保留</td></tr>
+<tr><td>L2 聚合</td><td><code>SUB_EN</code></td><td>模块 STATUS 有、IRQ 不拉</td><td>保留</td></tr>
+<tr><td>L3 控制器</td><td><code>ISENABLER</code> / <code>threshold</code> / <code>priority</code></td><td>控制器 pending 有、不送 CPU</td><td>保留</td></tr>
+<tr><td>L4 CPU</td><td><code>CPSR.I</code> / <code>PRIMASK</code> / <code>mstatus.MIE</code></td><td>IRQ 线拉着但 CPU 不响应</td><td>保留（IRQ 线持续）</td></tr>
+</table>
+<div class="good">
+<p><strong>排查口诀</strong>：读模块 RAW → 没有就是事件/捕获的问题（看 <a href="#5">§5</a>-<a href="#9">§9</a>）；RAW 有 STATUS 无 → 模块 mask；STATUS 有但控制器 pending 无 → 聚合层 SUB_EN 或连线接错；控制器 pending 有但不进 ISR → 控制器 enable / 优先级门限 / CPU 全局开关。<strong>每一层都提供可读的状态寄存器，是中断模块可调试性的基本要求。</strong></p>
+</div>
+
+<h3 id="4-4">4.4 优先级与抢占</h3>
+<table>
+<tr><th>概念</th><th>说明</th><th>硬件要点</th></tr>
+<tr><td><strong>优先级</strong></td><td>多个 pending 同时存在时谁先被服务</td><td>ARM/RISC-V PLIC 数值小=优先级高（PLIC 相反，数值大=高），文档必须写清</td></tr>
+<tr><td><strong>抢占 Preemption</strong></td><td>高优先级中断能否打断正在执行的低优先级 ISR</td><td>需要控制器维护 Active 状态和运行优先级栈</td></tr>
+<tr><td><strong>抢占分组</strong></td><td>优先级字段拆成"抢占级 + 子优先级"，同抢占级内不互相抢占</td><td>NVIC 的 <code>PRIGROUP</code>、GIC 的 <code>BPR</code></td></tr>
+<tr><td><strong>优先级门限</strong></td><td>低于门限的中断一律不送 CPU</td><td>PLIC <code>threshold</code>、GIC <code>PMR</code>、Cortex-M <code>BASEPRI</code></td></tr>
+<tr><td><strong>Tail-chaining</strong></td><td>连续中断之间不做出栈再入栈，直接切 ISR</td><td>Cortex-M 特性，显著降低背靠背中断开销</td></tr>
+<tr><td><strong>同优先级仲裁</strong></td><td>优先级相同时按中断号大小定</td><td>必须是<strong>确定性</strong>的，不能用随机或轮转——否则无法验证</td></tr>
+</table>
+<div class="warn">
+<p><strong>优先级反转</strong>：低优先级 ISR 持有自旋锁，高优先级 ISR 等锁，整个系统卡死。硬件侧能做的是：<strong>为关键中断（错误、看门狗）提供独立到 CPU 的通路</strong>，不与普通中断共用 pending/清除资源。</p>
+</div>
+<div class="part" id="P4">
+<div class="pn">第 四 部 分</div>
+<h2>中断源的类型：电平还是脉冲</h2>
+<p class="pd">这是中断硬件设计中<strong>最核心的一个选择</strong>。选错或者上下游理解不一致，表现就是"中断丢了"或者"中断停不下来"。关键问题只有一个：<strong>事件信号自己能不能一直保持，直到软件来处理？</strong></p>
+</div>
+
+<h2 id="5">5. 电平型中断源</h2>
+<p><strong>定义</strong>：中断请求信号在<strong>中断条件成立期间一直保持有效电平</strong>，条件消失后自动变回无效。信号本身就携带"当前状态"。</p>
+<div class="diagram">  触发条件  ───┐ fifo_cnt &gt;= threshold         ┌─── 条件消失（软件读走数据）
+               ▼                                ▼
+  int_level  ──┌──────────────────────────────┐─────────
+               │   持续拉高，直到根因消失      │
+            ───┘                              └─────────
+
+  特点：① 信号 = 状态，不需要额外锁存
+        ② 软件任何时刻读都能看到真实情况
+        ③ "清中断" = "消除根因"，而不是写某个 bit</div>
+
+<h3>5.1 典型的电平型中断源</h3>
+<table>
+<tr><th>中断源</th><th>有效条件</th><th>何时自动撤销</th></tr>
+<tr><td>UART RX FIFO 非空 / 水位到</td><td><code>rx_cnt &gt; level</code></td><td>软件读走数据使 <code>rx_cnt</code> 降下来</td></tr>
+<tr><td>TX FIFO 空 / 水位以下</td><td><code>tx_cnt &lt; level</code></td><td>软件写入新数据</td></tr>
+<tr><td>外部 <code>nIRQ</code> 引脚（开漏共享）</td><td>从设备拉低</td><td>软件通过 I2C/SPI 访问从设备清其内部状态后，从设备释放引脚</td></tr>
+<tr><td>温度超限 / 电压异常</td><td>比较器输出有效</td><td>物理条件恢复</td></tr>
+<tr><td>GPIO 电平中断</td><td>引脚处于配置的电平</td><td>外部信号变化</td></tr>
+<tr><td>总线 / 模块 busy-error 保持态</td><td>错误状态寄存器非 0</td><td>软件清错误状态寄存器</td></tr>
+</table>
+
+<h3>5.2 优点</h3>
+<table>
+<tr><th>优点</th><th>说明</th></tr>
+<tr><td><strong>天然不丢中断</strong></td><td>条件成立就一直拉着，即使 CPU 关中断很久，打开后立刻看到</td></tr>
+<tr><td><strong>天然支持共享</strong></td><td>多个源线与（开漏）到一根线上，只要还有一个有效线就是有效的，不会相互掩盖</td></tr>
+<tr><td><strong>状态自洽</strong></td><td>IRQ 线的电平永远等于"还有没有活要干"，软硬件视图一致</td></tr>
+<tr><td><strong>跨时钟域友好</strong></td><td>电平信号用两级同步器即可安全跨域（见 <a href="#9">§9</a>），不像窄脉冲会丢</td></tr>
+<tr><td><strong>对中断合并友好</strong></td><td>ISR 处理期间又来新数据，水位仍在线上，不需要额外机制</td></tr>
+</table>
+
+<h3>5.3 缺点与陷阱</h3>
+<table>
+<tr><th>问题</th><th>说明</th><th>对策</th></tr>
+<tr><td><strong>无法表达"发生了 N 次"</strong></td><td>只知道"现在条件成立"，不知道期间发生了几次</td><td>需要计数的场合（如溢出次数）必须另配计数器或用边沿型</td></tr>
+<tr><td><strong>瞬时事件无法表达</strong></td><td>"一次传输完成"这种只存在一拍的事件，没有可持续的状态</td><td>必须转成锁存型（见 <a href="#8">§8</a>）</td></tr>
+<tr><td><strong>必须消除根因才能退出 ISR</strong></td><td>软件只清寄存器没用，不读数据就会立刻重入</td><td>ISR 流程必须正确，手册要写明"清除方式 = 消除条件"</td></tr>
+<tr><td><strong>反复进 ISR / 中断风暴</strong></td><td>根因无法立即消除（如温度不降）时，ISR 疯狂重入，系统卡死</td><td>ISR 中<strong>临时屏蔽该源</strong>，交由任务处理，处理完再解屏蔽</td></tr>
+<tr><td><strong>一次中断延迟较大</strong></td><td>需等待整个电平同步传播</td><td>一般不是瓶颈</td></tr>
+</table>
+<div class="bad">
+<p><strong>电平型 + 根因不可消除 = 死机</strong>。例如过温中断：温度降不下来，IRQ 一直拉着，CPU 从 ISR 一返回立刻再进，连降频的代码都跑不完。<strong>标准做法</strong>：ISR 第一件事就是屏蔽自己（写 mask），然后发一个标志给后台任务；任务完成降频/散热后再解除屏蔽。这个"自屏蔽"模式是电平型中断驱动的通用写法，硬件必须保证<strong>屏蔽位可被 ISR 快速写入且立即生效</strong>。</p>
+</div>
+
+<h2 id="6">6. 脉冲 / 边沿型中断源</h2>
+<p><strong>定义</strong>：中断请求是一个<strong>瞬时事件</strong>——持续一个（或几个）时钟周期的脉冲，或信号的一次跳变沿。事件本身不携带持续状态，<strong>必须被硬件锁存成 pending 位</strong>，否则 CPU 还没来得及响应，信号就消失了。</p>
+<div class="diagram">  事件脉冲   ────┐  ┌─┐     ┌─┐
+                 └──┘ └─────┘ └────────────    ← 只有 1 拍，不锁存就没了
+                      │       │
+                      ▼       ▼
+  pending 位  ────────┌───────────────┐────    ← 必须锁存
+                      │  置 1 后保持   │
+               ───────┘               └────
+                                      ▲
+                                 软件写 1 清除
+
+  核心规则：脉冲型中断源 ⇒ 必须有 pending 锁存 + 明确的清除端口</div>
+
+<h3>6.1 典型的脉冲 / 边沿型中断源</h3>
+<table>
+<tr><th>中断源</th><th>事件</th><th>为什么必须锁存</th></tr>
+<tr><td>DMA 传输完成</td><td><code>done</code> 拉高一拍</td><td>完成是瞬时事件，没有持续状态</td></tr>
+<tr><td>定时器溢出 / 匹配</td><td>计数器回绕那一拍</td><td>下一拍计数器就继续走了</td></tr>
+<tr><td>SPI/I2C 传输结束</td><td><code>xfer_done</code> 一拍</td><td>同上</td></tr>
+<tr><td>FIFO 溢出 / 下溢错误</td><td>错误发生那一拍</td><td>错误是事件，不是状态；而且<strong>软件需要知道发生过</strong></td></tr>
+<tr><td>GPIO 边沿中断</td><td>引脚跳变</td><td>跳变本身没有持续时间</td></tr>
+<tr><td>ECC 纠错事件</td><td>某次访问发生纠错</td><td>需要计数与记录</td></tr>
+<tr><td>看门狗第一级超时</td><td>超时那一拍</td><td>同上</td></tr>
+</table>
+
+<h3>6.2 优点</h3>
+<table>
+<tr><th>优点</th><th>说明</th></tr>
+<tr><td><strong>能表达瞬时事件</strong></td><td>"做完了"这类事件只能用脉冲表达</td></tr>
+<tr><td><strong>清除路径明确</strong></td><td>软件写 1 清 pending，不依赖"根因是否消除"，ISR 写法简单可靠</td></tr>
+<tr><td><strong>不会中断风暴</strong></td><td>清掉就不再触发，除非真的又来了新事件</td></tr>
+<tr><td><strong>可区分多次发生</strong></td><td>配合 overflow 标志位或计数器可知道"清之前又来过"</td></tr>
+</table>
+
+<h3>6.3 缺点与陷阱</h3>
+<table>
+<tr><th>问题</th><th>说明</th><th>对策</th></tr>
+<tr><td class="risk"><strong>没锁存就丢中断</strong></td><td>最严重的中断 Bug。脉冲只有一拍，CPU 不可能恰好那一拍响应</td><td><strong>脉冲型必须配 pending 寄存器</strong>，这是硬性规则</td></tr>
+<tr><td><strong>跨时钟域会丢</strong></td><td>快时钟域的一拍脉冲到慢时钟域可能采不到</td><td>先在源域锁存成电平再同步，或用 toggle 同步（见 <a href="#9">§9</a>）</td></tr>
+<tr><td><strong>事件合并，次数丢失</strong></td><td>pending 已是 1 时又来一个事件，第二个被"吸收"，软件只看到一次</td><td>需要次数时加 <strong>overflow / 丢失标志位</strong>或事件计数器</td></tr>
+<tr><td><strong>不适合线或共享</strong></td><td>两个脉冲源 OR 到一起，若它们同拍发生只会看到一个脉冲</td><td>每源独立 pending 位，OR 只在 pending 之后做</td></tr>
+<tr><td><strong>清除与新事件竞争</strong></td><td>软件写清那一拍恰好又来一个事件 → 新事件被吞掉</td><td><strong>置位优先</strong>的清除逻辑，见 <a href="#11-1">§11.1</a></td></tr>
+<tr><td><strong>毛刺误触发</strong></td><td>外部引脚的抖动/毛刺被当成边沿</td><td>去抖滤波 + 同步，见 <a href="#9">§9</a></td></tr>
+</table>
+<div class="bad">
+<p><strong>绝对不要把未锁存的组合脉冲直接接到 IRQ 端口。</strong>常见错误写法：
+</p>
+<pre><code>// 错误：done_pulse 只有一拍，接出去几乎必然丢
+assign irq_o = done_pulse;
+
+// 错误：虽然打了一拍，但还是脉冲，软件仍然采不到
+always @(posedge clk) irq_o &lt;= done_pulse;</code></pre>
+<p>正确写法必须是 set/clear 型的 pending 寄存器，见 <a href="#12">§12</a>。</p>
+</div>
+
+<h2 id="7">7. 两种类型的对比与选型</h2>
+<table>
+<tr><th>维度</th><th>电平型</th><th>脉冲 / 边沿型</th></tr>
+<tr><td>信号语义</td><td>状态（还有活要干）</td><td>事件（发生了一次）</td></tr>
+<tr><td>是否必须锁存</td><td>否（源自带保持）</td><td><strong>是</strong></td></tr>
+<tr><td>丢中断风险</td><td>低</td><td>高（不锁存必丢）</td></tr>
+<tr><td>如何清除</td><td>消除根因（读数据、清错误状态）</td><td>写 1 清 pending / 读清 / 自清</td></tr>
+<tr><td>中断风暴风险</td><td>高（根因不消失就反复进）</td><td>低</td></tr>
+<tr><td>能否表达次数</td><td>不能</td><td>能（配 overflow 位或计数器）</td></tr>
+<tr><td>能否线与共享</td><td><strong>能</strong>（开漏共享 <code>nIRQ</code> 的基础）</td><td>不能直接共享</td></tr>
+<tr><td>CDC 处理</td><td>两级同步器即可</td><td>需 toggle / 展宽 / 握手</td></tr>
+<tr><td>控制器配置</td><td>GIC <code>ICFGR</code> = level</td><td>GIC <code>ICFGR</code> = edge</td></tr>
+<tr><td>典型代表</td><td>FIFO 水位、外部 <code>nIRQ</code>、过温</td><td>DMA done、timer 溢出、错误事件</td></tr>
+</table>
+
+<h3>7.1 选型决策</h3>
+<div class="diagram">  这个中断的根因是"持续状态"还是"瞬时事件"？
+   │
+   ├── 持续状态（FIFO 有数据 / 错误状态寄存器非 0 / 条件成立）
+   │     └──▶ 电平型
+   │          · 直接把条件接出来，不锁存
+   │          · 手册写明"清除 = 消除条件"
+   │          · 驱动采用"ISR 自屏蔽"模式防风暴
+   │
+   └── 瞬时事件（完成 / 溢出 / 跳变 / 一次性错误）
+         └──▶ 脉冲型
+              · 必须做 pending 锁存（set 优先）
+              · 提供 W1C 清除端口
+              · 软件关心次数 ⇒ 加 overflow 标志
+              · 跨时钟域 ⇒ 先转电平再同步
+
+  实在拿不准时：做成脉冲型 + pending 锁存。
+  因为"事件一定不丢 + 清除路径明确"比什么都重要，
+  而电平型的行为总可以用"条件成立时持续置 pending"来模拟。</div>
+<div class="good">
+<p><strong>工业界的主流做法</strong>：模块内部<strong>统一用"锁存型 pending + W1C"</strong>（即对外表现为边沿/脉冲型），即使根因是电平状态也先锁存。少数确实需要"状态自洽"的源（FIFO 水位、共享 <code>nIRQ</code>）才保留电平型。这样整个 SoC 的中断行为一致，软件写法统一，GIC 配置也简单（绝大多数配成 edge）。</p>
+</div>
+
+<h3>7.2 混合型：电平条件 + 边沿捕获</h3>
+<p>还有一类常见设计：<strong>根因是电平条件，但中断按条件的上升沿触发一次</strong>。</p>
+<table>
+<tr><th>行为</th><th>说明</th><th>适用</th></tr>
+<tr><td>条件 0→1 时置 pending 一次</td><td>之后条件继续保持也不再置位</td><td>"水位第一次越过阈值"这种只需通知一次的场景</td></tr>
+<tr><td>软件清除后，条件仍为 1 也不再触发</td><td>必须条件先掉下去再上来才再触发</td><td>避免风暴</td></tr>
+</table>
+<div class="warn">
+<p>这种设计<strong>必须在手册里写得极其清楚</strong>，否则软件会困惑："FIFO 明明还有数据，为什么清了中断就不来了？"常见的补救是同时提供一个电平型的状态位供软件轮询确认。</p>
+</div>
+
+<h2 id="8">8. 电平/脉冲转换电路</h2>
+
+<h3>8.1 电平 → 脉冲（边沿检测）</h3>
+<p>把一个持续的电平条件转成一拍脉冲，用于触发锁存型 pending。</p>
+<pre><code>// 标准上升沿检测
+reg cond_d;
+always @(posedge clk or negedge rst_n)
+    if (!rst_n) cond_d &lt;= 1'b0;
+    else        cond_d &lt;= cond_sync;      // cond_sync 必须已同步过
+
+wire rise_pulse = cond_sync &amp; ~cond_d;     // 上升沿
+wire fall_pulse = ~cond_sync &amp; cond_d;     // 下降沿
+wire both_pulse = cond_sync ^ cond_d;      // 双沿</code></pre>
+<div class="warn">
+<p><code>cond_sync</code> <strong>必须是已经同步到本时钟域的信号</strong>。直接对异步信号做边沿检测，亚稳态会让 <code>cond</code> 和 <code>cond_d</code> 解析不一致，产生<strong>虚假脉冲</strong>——表现为"没动过的引脚莫名其妙报中断"。</p>
+</div>
+
+<h3>8.2 脉冲 → 电平（锁存）</h3>
+<p>把一拍脉冲变成持续的 pending 电平，这是<strong>所有脉冲型中断的标准处理</strong>。</p>
+<pre><code>// set 优先的 pending 锁存（关键：set 的优先级高于 clear）
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n)
+        int_pending &lt;= 1'b0;
+    else if (event_pulse)           // ① 置位优先
+        int_pending &lt;= 1'b1;
+    else if (clr_wr &amp;&amp; wdata[0])    // ② 后判清除
+        int_pending &lt;= 1'b0;
+end</code></pre>
+
+<h3>8.3 脉冲展宽（跨到慢时钟域）</h3>
+<p>当源域比目的域快，一拍脉冲可能被慢时钟整个跳过。</p>
+<pre><code>// 方案 A：展宽成 N 拍（N &gt; 慢时钟周期 / 快时钟周期 + 2）
+reg [2:0] stretch;
+always @(posedge fast_clk or negedge rst_n)
+    if (!rst_n)            stretch &lt;= 3'b0;
+    else if (event_pulse)  stretch &lt;= 3'b111;      // 重装
+    else if (|stretch)     stretch &lt;= stretch - 1'b1;
+wire wide_pulse = |stretch;     // 再送两级同步器
+
+// 方案 B：toggle 同步（更稳，不依赖频率比）
+reg tog;
+always @(posedge fast_clk or negedge rst_n)
+    if (!rst_n)           tog &lt;= 1'b0;
+    else if (event_pulse) tog &lt;= ~tog;
+// 目的域：两级同步 + 边沿检测，还原出脉冲</code></pre>
+<div class="note">
+<p>方案 B（toggle）的限制是<strong>两次事件的间隔必须大于同步延迟</strong>，否则会丢事件。若事件可能背靠背，需要在源域加 pending 或用异步 FIFO/握手。中断场景通常事件稀疏，toggle 够用。</p>
+</div>
+
+<h3>8.4 电平 → 电平（跨域）</h3>
+<p>电平型中断跨域最简单：<strong>两级同步器直接打两拍</strong>即可。因为电平持续时间远大于两个目的域周期，不存在丢失问题。这是电平型中断相对脉冲型的一大优势。</p>
+
+<h2 id="9">9. 中断源的跨时钟域与去抖</h2>
+
+<h3>9.1 中断路径上的 CDC</h3>
+<table>
+<tr><th>场景</th><th>风险</th><th>处理</th></tr>
+<tr><td>外设时钟域 → 寄存器(APB)时钟域</td><td>脉冲丢失、亚稳态</td><td>电平：两级同步；脉冲：toggle 或展宽后同步</td></tr>
+<tr><td>外部引脚（完全异步） → 芯片内部</td><td>亚稳态 + 毛刺 + 抖动</td><td>同步器 + 数字滤波 + 可配极性</td></tr>
+<tr><td>低功耗域 → 常开域（唤醒源）</td><td>时钟已关，无法用同步器</td><td>走异步唤醒通路（电平敏感），唤醒后再正常同步</td></tr>
+<tr><td>多个异步源 OR 后再同步</td><td><strong>重汇聚</strong>：各位解析时刻不同产生毛刺</td><td><strong>必须先各自同步、再 OR</strong>，绝不能先 OR 后同步</td></tr>
+</table>
+<div class="bad">
+<p><strong>先 OR 后同步是中断模块最隐蔽的 CDC Bug</strong>。多个异步源 OR 到一起再进同步器，两路同时跳变时组合逻辑产生毛刺，同步器可能采到虚假的 1（虚假中断）或错过真实的 1（丢中断）。正确顺序：<code>每源 → 两级同步 → OR</code>。</p>
+</div>
+
+<h3>9.2 外部引脚中断的去抖滤波</h3>
+<pre><code>// 计数型数字滤波：信号必须稳定 N 个周期才被认可
+reg [7:0] cnt;
+reg       filt_out;
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        cnt &lt;= 8'd0; filt_out &lt;= 1'b0;
+    end else if (pin_sync == filt_out) begin
+        cnt &lt;= 8'd0;                       // 与当前认可值相同，计数清零
+    end else if (cnt == DEBOUNCE_N) begin
+        filt_out &lt;= pin_sync;              // 持续不同够久，翻转
+        cnt      &lt;= 8'd0;
+    end else begin
+        cnt &lt;= cnt + 1'b1;
+    end
+end
+// filt_out 再送去做电平判断或边沿检测</code></pre>
+<table>
+<tr><th>滤波参数</th><th>考虑</th></tr>
+<tr><td>滤波宽度 <code>DEBOUNCE_N</code></td><td>必须 &gt; 最长抖动时间（机械按键 ~10ms），但 &lt; 最短有效脉冲宽度</td></tr>
+<tr><td>可配置性</td><td>做成寄存器可配，不同板子抖动特性不同</td></tr>
+<tr><td>可旁路</td><td>高速信号需要旁路滤波，提供 <code>FILTER_BYPASS</code> 位</td></tr>
+<tr><td>滤波时钟</td><td>低功耗场景滤波逻辑需跑在常开的低频时钟上</td></tr>
+</table>
+
+<h3>9.3 唤醒中断的特殊性</h3>
+<div class="warn">
+<p>作为<strong>唤醒源</strong>的中断必须在时钟关闭时仍能工作，因此：</p>
+<ul>
+<li>唤醒通路必须是<strong>电平敏感的异步逻辑</strong>（或跑在常开的 32kHz 时钟上），不能依赖主时钟的同步器</li>
+<li>唤醒电平必须<strong>保持到时钟恢复、同步器工作起来</strong>为止，否则刚唤醒就失去了中断信息</li>
+<li>唤醒使能（<code>WAKE_EN</code>）和中断使能（<code>INT_EN</code>）通常是<strong>两套独立的位</strong>，可以"只唤醒不中断"或"只中断不唤醒"</li>
+<li>唤醒后 pending 必须仍然存在，软件才知道是谁唤醒的——需要常开域的 pending 寄存器</li>
+</ul>
+</div>
+<div class="part" id="P5">
+<div class="pn">第 五 部 分</div>
+<h2>怎么清除中断</h2>
+<p class="pd">清除机制决定了 ISR 能不能正常退出。软件清、硬件清、自清除各有适用场景，但真正的难点不在"用哪种"，而在<strong>清除动作与新事件同时发生时的竞争</strong>——这是中断模块最容易出硅上 Bug 的地方。</p>
+</div>
+
+<h2 id="10">10. 清除方式总览</h2>
+<table>
+<tr><th>方式</th><th>谁发起</th><th>机制</th><th>适用</th><th>风险</th></tr>
+<tr><td><strong>W1C 写 1 清</strong></td><td>软件</td><td>软件向 <code>INT_CLR</code> 写 1 清对应位</td><td><strong>脉冲/边沿型的首选</strong></td><td>低，推荐</td></tr>
+<tr><td><strong>W0C 写 0 清</strong></td><td>软件</td><td>写 0 清，写 1 保持</td><td>极少用，历史遗留</td><td>易与"写 0 无效"混淆</td></tr>
+<tr><td><strong>读清除 RC</strong></td><td>软件</td><td>读状态寄存器的动作本身清除</td><td>老 IP（8250 UART 的 IIR/LSR）</td><td><strong>高</strong>：调试器读一眼就丢中断</td></tr>
+<tr><td><strong>读某个数据寄存器清</strong></td><td>软件（间接）</td><td>读 <code>RX_DATA</code> 自动清 RX 中断</td><td>UART/SPI 的接收中断</td><td>中：隐式副作用</td></tr>
+<tr><td><strong>硬件自清除</strong></td><td>硬件</td><td>条件自动消失，软件不干预</td><td>电平型、脉冲计数到期</td><td>中：软件可能来不及看到</td></tr>
+<tr><td><strong>条件消失才清（电平型）</strong></td><td>硬件 + 软件间接</td><td>软件消除根因，信号自然撤销</td><td>电平型中断</td><td>高：根因不消失就风暴</td></tr>
+<tr><td><strong>EOI / claim-complete</strong></td><td>软件</td><td>控制器层的服务结束通知</td><td>GIC/PLIC 必需</td><td>漏做会卡住后续中断</td></tr>
+<tr><td><strong>写 ICPR 强制清</strong></td><td>软件</td><td>直接清控制器的 pending</td><td>初始化、错误恢复</td><td>可能掩盖真实事件</td></tr>
+</table>
+<div class="good">
+<p><strong>推荐组合</strong>：模块级用 <strong>W1C</strong>（显式、无副作用、可重复、调试友好），控制器级用标准的 <strong>EOI/complete</strong>。这是当前主流 SoC 的默认选择。</p>
+</div>
+
+<h3 id="10-1">10.1 软件写 1 清除（W1C）</h3>
+<p>最主流的清除方式。软件向清除寄存器的某位写 1，硬件把对应 pending 位清零；写 0 的位不受影响。</p>
+<pre><code>// W1C 的标准实现（注意 set 优先）
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n)
+        int_raw &lt;= 32'b0;
+    else
+        int_raw &lt;= (int_raw &amp; ~clr_mask) | event_pulse;
+                 //         ↑清除          ↑置位（后 OR，天然 set 优先）
+end
+assign clr_mask = (psel &amp; penable &amp; pwrite &amp; (paddr == ADDR_INT_CLR)) ? pwdata : 32'b0;</code></pre>
+<table>
+<tr><th>W1C 的优点</th></tr>
+<tr><td><strong>按位独立</strong>：清 bit0 不影响 bit5，不需要读-改-写，<strong>天然原子</strong>，多任务/多核安全</td></tr>
+<tr><td><strong>无读副作用</strong>：状态寄存器可以被调试器、trace、多个任务任意读，不改变状态</td></tr>
+<tr><td><strong>幂等</strong>：重复写 1 清无害</td></tr>
+<tr><td><strong>语义明确</strong>：ISR 代码 <code>INT_CLR = bit</code> 一眼看懂</td></tr>
+</table>
+<div class="note">
+<p><strong>独立 CLR 寄存器 vs 状态寄存器自身 W1C</strong>：</p>
+<ul>
+<li><strong>状态寄存器自身 W1C</strong>（读返回状态、写 1 清）：地址少，但读写语义不同，某些总线/编译器的读-改-写优化会误清其他位</li>
+<li><strong>独立的只写 CLR 寄存器</strong>：状态寄存器纯 RO，语义最干净，<strong>推荐</strong></li>
+</ul>
+</div>
+
+<h3 id="10-2">10.2 读清除（Read-to-Clear, RC）</h3>
+<p>读取状态寄存器的动作本身就清除中断。常见于早期 IP（8250/16550 UART 的 <code>IIR</code>、<code>LSR</code>）。</p>
+<div class="bad">
+<p><strong>读清除是强烈不推荐的设计</strong>，原因：</p>
+<ul>
+<li><strong>调试器会破坏状态</strong>：JTAG 调试器刷新寄存器窗口、或在断点处显示外设寄存器，一读中断就没了，Bug 永远复现不出来</li>
+<li><strong>无法重复读</strong>：ISR 想二次确认状态都做不到</li>
+<li><strong>多个读者冲突</strong>：两个任务、或 ISR 与后台任务同时读，一方丢失信息</li>
+<li><strong>读-改-写陷阱</strong>：C 代码里一个看似无害的 <code>if (REG &amp; BIT)</code> 就触发了清除</li>
+<li><strong>trace / 性能分析工具</strong>同样会误触发</li>
+</ul>
+<p>如果必须兼容老协议，<strong>务必在手册中用显著方式标注"读有副作用"</strong>，并提供一个无副作用的影子寄存器供调试使用。</p>
+</div>
+
+<h3 id="10-3">10.3 硬件自清除</h3>
+<p>软件不需要显式清除，硬件在特定条件下自动把 pending 清零。</p>
+<table>
+<tr><th>自清除场景</th><th>触发条件</th><th>说明</th></tr>
+<tr><td><strong>读数据寄存器自清</strong></td><td>软件读 <code>RX_DATA</code></td><td>UART/SPI 接收中断最常见；"处理了数据"等价于"处理了中断"，省一次寄存器写</td></tr>
+<tr><td><strong>写数据寄存器自清</strong></td><td>软件写 <code>TX_DATA</code></td><td>TX 空中断：写了新数据就不再空</td></tr>
+<tr><td><strong>FIFO 水位自然回落</strong></td><td><code>cnt</code> 低于阈值</td><td>本质是电平型的自然撤销</td></tr>
+<tr><td><strong>控制器取号自清</strong></td><td>读 GIC <code>IAR</code> / PLIC <code>claim</code></td><td>边沿型中断在被 claim 时控制器侧 pending 自动清（<strong>注意：模块侧 pending 不会被清</strong>）</td></tr>
+<tr><td><strong>进入 ISR 自清</strong></td><td>Cortex-M NVIC 进入 ISR</td><td>边沿型自动清 pending；电平型则取决于源是否撤销</td></tr>
+<tr><td><strong>单次脉冲自撤销</strong></td><td>脉冲发完自己变 0</td><td><strong>这不是合法的中断清除</strong>，因为软件根本没机会看到，等于丢中断</td></tr>
+</table>
+<div class="warn">
+<p><strong>"读数据自清"的隐患</strong>：如果中断源是"FIFO 中有 ≥N 个数据"，软件只读了 1 个就自清，但 FIFO 里还有数据，此时中断条件仍成立却被清掉了 → <strong>剩下的数据没人管</strong>。正确做法是让该中断保持电平型语义：<strong>清除条件是"水位降到阈值以下"，而不是"读了一次"</strong>。</p>
+</div>
+<div class="bad">
+<p><strong>绝不要做"硬件 N 拍后自动清 pending"</strong>这种设计。软件无法保证在 N 拍内响应，中断必丢。任何 pending 位的清除都必须<strong>由软件动作（直接或间接）触发</strong>，或由"根因消失"触发。</p>
+</div>
+
+<h3 id="10-4">10.4 条件消失才清（电平型的清除）</h3>
+<p>电平型中断没有"清除寄存器"可写，<strong>清除就是消除根因</strong>。</p>
+<table>
+<tr><th>中断</th><th>ISR 必须做什么才能退出</th></tr>
+<tr><td>RX FIFO 非空</td><td>把 FIFO 读空（或读到水位以下）</td></tr>
+<tr><td>TX FIFO 空</td><td>写入新数据，或关掉该中断的 mask</td></tr>
+<tr><td>外部 <code>nIRQ</code> 低</td><td>通过 I2C/SPI 访问从设备，清它内部的状态寄存器，使其释放引脚</td></tr>
+<tr><td>过温</td><td>无法立即消除 → <strong>必须靠屏蔽</strong></td></tr>
+<tr><td>错误状态保持</td><td>写清错误状态寄存器（本质又回到 W1C）</td></tr>
+</table>
+<div class="diagram">  电平型中断的标准 ISR 模式（自屏蔽）：
+
+  ISR:
+    ① 读 INT_STATUS 确认是哪个源
+    ② 写 INT_MASK 屏蔽该源          ← 关键：立刻停止重入
+    ③ 设置标志 / 唤醒后台任务
+    ④ 返回
+
+  后台任务:
+    ⑤ 慢慢处理（读完 FIFO / 降频 / 访问外部从设备）
+    ⑥ 确认根因已消失
+    ⑦ 写 INT_MASK 解除屏蔽          ← 若期间又有新事件，这里会立刻重新触发
+
+  注意 ⑦ 之前必须确认根因真的消失，否则解屏蔽瞬间又进 ISR。</div>
+<div class="warn">
+<p><strong>外部共享 <code>nIRQ</code> 的延迟问题</strong>：从设备释放 <code>nIRQ</code> 需要经过 I2C 事务（可能几百微秒）+ 上拉电阻的 RC 上升时间。如果 CPU 在信号还没拉高时就退出 ISR，会立刻再次进入。对策：ISR 返回前<strong>读回确认引脚已释放</strong>，或采用自屏蔽模式。</p>
+</div>
+
+<h3 id="10-5">10.5 EOI / 控制器侧清除</h3>
+<p><strong>模块侧清 pending ≠ 控制器侧结束服务</strong>。ISR 必须两件事都做。</p>
+<table>
+<tr><th>控制器</th><th>取号</th><th>结束</th><th>漏做的后果</th></tr>
+<tr><td><strong>GIC</strong></td><td>读 <code>GICC_IAR</code>（返回 INTID，中断转为 Active）</td><td>写 <code>GICC_EOIR</code>（降低运行优先级），GICv2 分离模式还需写 <code>DIR</code> 清 Active</td><td>漏 EOI → 运行优先级一直很高，<strong>同级及以下中断全部被挡住</strong>，系统看似"只响应了一次中断就死了"</td></tr>
+<tr><td><strong>PLIC</strong></td><td>读 <code>claim</code>（返回 ID 并清该源 pending）</td><td>写 <code>complete</code>（写回同一个 ID）</td><td>漏 complete → 该中断源<strong>永久不再上报</strong></td></tr>
+<tr><td><strong>NVIC</strong></td><td>硬件自动</td><td>硬件自动（异常返回时）</td><td>无需软件干预，这是 Cortex-M 的优势</td></tr>
+</table>
+<div class="diagram">  完整的 ISR 清除顺序（电平型源 + GIC）：
+
+  ① 读 IAR 取得 INTID                 ← 控制器层
+  ② 读模块 INT_STATUS 确定子源        ← 模块层
+  ③ 处理（读数据 / 排错）
+  ④ 清模块中断（W1C 或消除根因）      ← 模块层，必须在 EOI 之前
+  ⑤ 读回确认模块 IRQ 已撤销           ← 关键，电平型尤其重要
+  ⑥ 写 EOIR 结束                      ← 控制器层
+  ⑦ 异常返回
+
+  顺序错了会怎样？
+  · ④⑤ 放到 ⑥ 之后 → 电平型 IRQ 还拉着，EOI 后立刻再次触发 → 风暴
+  · 漏 ⑥            → 后续同级中断全被挡住
+  · 漏 ⑤            → 写缓冲导致清除还没到达硬件就 EOI（见 §11.3）</div>
+
+<h2 id="11">11. 清除时序与竞争</h2>
+
+<h3 id="11-1">11.1 写清与置位同拍的竞争</h3>
+<p><strong>这是中断模块最重要的时序问题。</strong>软件写清除的那一拍，硬件恰好又来一个新事件，谁赢？</p>
+<div class="diagram">            ┌─ 软件写 INT_CLR
+            ▼
+  clk  ──┐ ┌─┐ ┌─┐ ┌─┐
+         └─┘ └─┘ └─┘ └─
+  clr    ───┌───┐──────      ① 清除请求
+  event  ───┌───┐──────      ② 新事件恰好同拍
+
+  清除优先（错误）：pending = 0  →  新事件被吞掉，永久丢失
+  置位优先（正确）：pending = 1  →  软件下次 ISR 还能看到，最多多进一次</div>
+<pre><code>// 正确：置位优先
+always @(posedge clk or negedge rst_n)
+    if (!rst_n)              pending &lt;= 1'b0;
+    else if (event_pulse)    pending &lt;= 1'b1;   // ← set 在前
+    else if (clr_req)        pending &lt;= 1'b0;
+
+// 或等价的位向量写法（OR 在最外层，天然 set 优先）
+always @(posedge clk or negedge rst_n)
+    if (!rst_n) int_raw &lt;= '0;
+    else        int_raw &lt;= (int_raw &amp; ~clr_mask) | event_vec;
+
+// 错误：清除优先，会丢事件
+always @(posedge clk)
+    if (clr_req)             pending &lt;= 1'b0;   // ← 新事件被吃掉
+    else if (event_pulse)    pending &lt;= 1'b1;</code></pre>
+<div class="good">
+<p><strong>铁律：置位永远优先于清除。</strong>代价是"可能多进一次 ISR"（软件读 STATUS 发现没事做，直接返回，无害）；反之的代价是"永久丢一个中断"（可能导致 DMA 永远不完成、数据永远收不到），严重得多。</p>
+</div>
+<div class="note">
+<p><strong>APB 写的哪一拍算清除</strong>：必须明确定义为 <code>psel &amp; penable &amp; pwrite</code> 的那一拍（ACCESS 相位），且清除脉冲只有一拍。若用 <code>psel &amp; pwrite</code>（SETUP+ACCESS 两拍），清除窗口变宽，吞掉事件的概率翻倍。这是 RTL review 的必查项。</p>
+</div>
+
+<h3 id="11-2">11.2 清除后仍反复进 ISR</h3>
+<table>
+<tr><th>原因</th><th>诊断</th><th>解决</th></tr>
+<tr><td>电平型，根因没消除</td><td>读 RAW 发现清了还是 1</td><td>消除根因，或 ISR 自屏蔽</td></tr>
+<tr><td>清了模块，没清聚合层的锁存</td><td>模块 STATUS=0 但上层 IRQ 仍为 1</td><td><strong>聚合层不应锁存</strong>（见 <a href="#3-3">§3.3</a>）</td></tr>
+<tr><td>漏了 EOI / complete</td><td>控制器状态寄存器显示 Active</td><td>补上 EOI</td></tr>
+<tr><td>清了一个子源，还有别的子源 pending</td><td>STATUS 还有其他位是 1</td><td>ISR 循环处理所有置位的子源，而不是只处理第一个</td></tr>
+<tr><td>GIC 配成 level 但源是脉冲</td><td>pending 清不掉或行为诡异</td><td>检查 <code>ICFGR</code> 与 RTL 一致性</td></tr>
+<tr><td>多核都收到同一个中断</td><td>多核同时进 ISR，一个清了另一个发现没事干</td><td>ISR 必须能容忍"伪中断"（读 STATUS 为 0 直接返回）</td></tr>
+</table>
+<div class="good">
+<p><strong>ISR 必须能容忍伪中断（spurious interrupt）</strong>。读 STATUS 发现全 0 时，正确的做法是做完 EOI 直接返回，而不是报错或死循环。GIC 甚至专门定义了 spurious INTID 1023。这是鲁棒驱动的基本要求，<strong>硬件 spec 里应明确说明伪中断是可能发生的</strong>。</p>
+</div>
+
+<h3 id="11-3">11.3 写缓冲导致的 ISR 重入</h3>
+<div class="bad">
+<p><strong>最隐蔽的中断 Bug 之一。</strong>ISR 写了 <code>INT_CLR</code>，但这次写被总线写缓冲（write buffer / posted write）缓存住了，CPU 不等写完成就继续执行并执行了异常返回。此时清除还没到达外设，IRQ 线仍然拉着，CPU 返回的瞬间立刻又被同一个中断打进来。</p>
+</div>
+<div class="diagram">  CPU:   写 INT_CLR ──▶ 写缓冲 ──(几十拍后)──▶ APB ──▶ 外设清 pending
+            │                                              ▲
+            ▼                                              │
+         立刻 eret ──▶ IRQ 仍为 1 ──▶ 再次进 ISR ──────────┘
+                                      (此时才清掉，但已多进一次)
+
+  严重时：若外设访问很慢（低速 APB / 跨多级桥），可能连进几十次 ISR。</div>
+<table>
+<tr><th>解决手段</th><th>说明</th><th>归属</th></tr>
+<tr><td><strong>写后读回</strong></td><td>ISR 写完 <code>INT_CLR</code> 后<strong>读一次同一外设的任意寄存器</strong>，读操作不能被缓冲，会强制前面的写完成</td><td>软件（最通用）</td></tr>
+<tr><td><strong>内存屏障</strong></td><td><code>DSB</code> / <code>fence</code>，但对 posted write 不一定足够，仍推荐读回</td><td>软件</td></tr>
+<tr><td><strong>外设侧不用 posted write</strong></td><td>中断寄存器所在区域配成 strongly-ordered / device-nGnRnE</td><td>系统配置（MPU/MMU 属性）</td></tr>
+<tr><td><strong>硬件提供清除完成状态</strong></td><td>提供一个"清除已生效"的状态位供软件 poll</td><td>硬件（较少见）</td></tr>
+<tr><td><strong>ISR 自屏蔽</strong></td><td>先屏蔽（屏蔽同样有写缓冲问题，但屏蔽+读回成本更低）</td><td>软件</td></tr>
+</table>
+<div class="good">
+<p><strong>硬件 spec 的责任</strong>：在中断寄存器章节明确写上「<strong>写 INT_CLR 后必须读回本模块任一寄存器以确保清除已生效，再执行中断返回</strong>」。这一句话能省掉驱动团队几周的调试时间。</p>
+</div>
+
+<h3 id="11-4">11.4 事件合并与丢失计数</h3>
+<p>pending 已为 1 时又来一个事件，第二个事件被"吸收"，软件无法得知。</p>
+<table>
+<tr><th>场景</th><th>是否可接受</th><th>处理</th></tr>
+<tr><td>FIFO 水位中断（电平型）</td><td>可接受</td><td>软件读 FIFO 直到空，次数无意义</td></tr>
+<tr><td>DMA 描述符完成</td><td><strong>不可接受</strong></td><td>需要完成计数器，或用描述符链表让软件遍历</td></tr>
+<tr><td>ECC 纠错</td><td><strong>不可接受</strong></td><td>配事件计数器 + 饱和标志</td></tr>
+<tr><td>FIFO 溢出错误</td><td>一般可接受</td><td>只需知道"发生过溢出"</td></tr>
+<tr><td>外部中断</td><td>视场景</td><td>需要时加 <code>INT_OVERFLOW</code> 位：pending 为 1 时又来事件则置位</td></tr>
+</table>
+<pre><code>// 带丢失标志的 pending
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        pending &lt;= 1'b0; overflow &lt;= 1'b0;
+    end else begin
+        if (event_pulse &amp;&amp; pending &amp;&amp; !clr_pending)
+            overflow &lt;= 1'b1;            // 清之前又来了，记一笔
+        else if (clr_overflow)
+            overflow &lt;= 1'b0;
+
+        if (event_pulse)        pending &lt;= 1'b1;
+        else if (clr_pending)   pending &lt;= 1'b0;
+    end
+end</code></pre>
+
+<div class="part" id="P6">
+<div class="pn">第 六 部 分</div>
+<h2>实现与验证</h2>
+<p class="pd">把前面的规则落到可综合的 RTL，并给出一份能真正抓到问题的验证清单。</p>
+</div>
+
+<h2 id="12">12. 可综合参考实现</h2>
+<p>一个标准的模块级中断单元，支持每位可配电平/边沿、RAW/EN/STATUS/CLR 四件套、置位优先、overflow 标志。</p>
+<pre><code>module int_ctrl #(
+    parameter int N = 8
+)(
+    input  logic         clk,
+    input  logic         rst_n,
+
+    // 中断源（已同步到 clk 域）
+    input  logic [N-1:0] src_i,          // 电平型源：条件成立时为 1
+    input  logic [N-1:0] pulse_i,        // 脉冲型源：事件发生时一拍 1
+
+    // 寄存器接口（APB 简化）
+    input  logic         wr_en_clr,      // 写 INT_CLR 的 ACCESS 拍
+    input  logic [N-1:0] wdata_clr,
+    input  logic         wr_en_mask,
+    input  logic [N-1:0] wdata_mask,
+    input  logic [N-1:0] cfg_edge_mode,  // 1=边沿捕获, 0=电平直通
+
+    output logic [N-1:0] int_raw_o,      // RIS
+    output logic [N-1:0] int_mask_o,     // IMSC (1=使能)
+    output logic [N-1:0] int_status_o,   // MIS
+    output logic [N-1:0] int_ovf_o,      // 丢失标志
+    output logic         irq_o
+);
+
+    // ---------- 1. 事件捕获：电平转边沿 ----------
+    logic [N-1:0] src_d, src_rise, event_vec;
+
+    always_ff @(posedge clk or negedge rst_n)
+        if (!rst_n) src_d &lt;= '0;
+        else        src_d &lt;= src_i;
+
+    assign src_rise  = src_i &amp; ~src_d;                 // 上升沿
+    assign event_vec = (cfg_edge_mode &amp; (src_rise | pulse_i))
+                     | (~cfg_edge_mode &amp; src_i);       // 电平模式直接用电平
+
+    // ---------- 2. pending 锁存：置位优先 ----------
+    logic [N-1:0] clr_vec;
+    assign clr_vec = wr_en_clr ? wdata_clr : '0;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            int_raw_o &lt;= '0;
+        else
+            // 电平模式：条件为 1 时持续置位，条件消失后可被清（或自然为 0）
+            // 边沿模式：事件置位后保持，必须软件清
+            int_raw_o &lt;= (int_raw_o &amp; ~clr_vec) | event_vec;
+            //                      ↑清除            ↑置位（OR 在外层 = set 优先）
+    end
+
+    // ---------- 3. 丢失标志 ----------
+    always_ff @(posedge clk or negedge rst_n)
+        if (!rst_n) int_ovf_o &lt;= '0;
+        else        int_ovf_o &lt;= (int_ovf_o &amp; ~clr_vec)
+                               | (event_vec &amp; int_raw_o &amp; ~clr_vec);
+
+    // ---------- 4. 屏蔽：复位默认全关 ----------
+    always_ff @(posedge clk or negedge rst_n)
+        if (!rst_n)           int_mask_o &lt;= '0;        // 0 = 禁止，复位安全
+        else if (wr_en_mask)  int_mask_o &lt;= wdata_mask;
+
+    // ---------- 5. 输出 ----------
+    assign int_status_o = int_raw_o &amp; int_mask_o;
+    assign irq_o        = |int_status_o;               // 纯组合 OR，不再锁存
+
+endmodule</code></pre>
+<table>
+<tr><th>实现要点回顾</th><th>对应章节</th></tr>
+<tr><td>事件捕获前必须已同步（<code>src_i</code> 是同步后的）</td><td><a href="#9">§9</a></td></tr>
+<tr><td>边沿检测用 <code>src &amp; ~src_d</code>，不直接用异步信号</td><td><a href="#8">§8.1</a></td></tr>
+<tr><td>pending 置位优先（OR 放最外层）</td><td><a href="#11-1">§11.1</a></td></tr>
+<tr><td>mask 复位为 0（全禁止）</td><td><a href="#4-2">§4.2</a></td></tr>
+<tr><td><code>irq_o</code> 是纯组合 OR，<strong>不再二次锁存</strong></td><td><a href="#3-3">§3.3</a></td></tr>
+<tr><td>同时输出 RAW 和 STATUS</td><td><a href="#4-1">§4.1</a></td></tr>
+<tr><td>清除脉冲只有一拍（<code>wr_en_clr</code> 用 ACCESS 相位）</td><td><a href="#11-1">§11.1</a></td></tr>
+</table>
+
+<h2 id="13">13. 典型 Bug 清单</h2>
+<table>
+<tr><th>#</th><th>Bug</th><th>现象</th><th>根因 / 修法</th></tr>
+<tr><td>1</td><td>脉冲源未锁存直接输出</td><td>中断偶尔收不到，压力越大越容易丢</td><td>加 pending 寄存器（<a href="#6">§6</a>）</td></tr>
+<tr><td>2</td><td>清除优先于置位</td><td>高频事件下偶发丢中断，DMA 卡死</td><td>改成置位优先（<a href="#11-1">§11.1</a>）</td></tr>
+<tr><td>3</td><td>mask 复位值为"使能"</td><td>复位后立刻进 ISR，系统跑飞</td><td>复位默认全屏蔽（<a href="#4-2">§4.2</a>）</td></tr>
+<tr><td>4</td><td>聚合层二次锁存</td><td>清了模块中断，IRQ 不撤销，中断风暴</td><td>聚合层改纯组合 OR（<a href="#3-3">§3.3</a>）</td></tr>
+<tr><td>5</td><td>异步源先 OR 后同步</td><td>偶发虚假中断 / 丢中断，无法复现</td><td>先各自同步再 OR（<a href="#9">§9.1</a>）</td></tr>
+<tr><td>6</td><td>未同步信号做边沿检测</td><td>引脚没动也报中断</td><td>先过两级同步器（<a href="#8">§8.1</a>）</td></tr>
+<tr><td>7</td><td>GIC <code>ICFGR</code> 与源类型不符</td><td>中断只来一次 / 清不掉</td><td>核对集成配置（<a href="#3-4">§3.4</a>）</td></tr>
+<tr><td>8</td><td>ISR 漏 EOI</td><td>只响应一次中断后全系统中断失效</td><td>补 EOI（<a href="#10-5">§10.5</a>）</td></tr>
+<tr><td>9</td><td>写清后未读回就返回</td><td>连续多次进同一 ISR</td><td>写后读回（<a href="#11-3">§11.3</a>）</td></tr>
+<tr><td>10</td><td>读清除设计</td><td>加断点调试后 Bug 消失</td><td>改 W1C（<a href="#10-2">§10.2</a>）</td></tr>
+<tr><td>11</td><td>只提供 STATUS 不提供 RAW</td><td>无法区分"事件没来"和"被屏蔽"</td><td>补 RAW 寄存器（<a href="#4-1">§4.1</a>）</td></tr>
+<tr><td>12</td><td>电平型中断无屏蔽位</td><td>根因不可消除时系统死锁</td><td>每源必须有可写的 mask（<a href="#10-4">§10.4</a>）</td></tr>
+<tr><td>13</td><td>清除窗口两拍宽</td><td>偶发吞事件</td><td>只用 ACCESS 相位（<a href="#11-1">§11.1</a>）</td></tr>
+<tr><td>14</td><td>唤醒通路依赖被关的时钟</td><td>进低功耗后再也醒不来</td><td>唤醒走常开/异步通路（<a href="#9">§9.3</a>）</td></tr>
+<tr><td>15</td><td>复位域不一致</td><td>复位撤离瞬间虚假中断</td><td>中断逻辑与源同复位域，或做 RDC 处理</td></tr>
+<tr><td>16</td><td>ISR 只处理 STATUS 最低位</td><td>多源同时 pending 时漏处理</td><td>驱动循环处理所有置位；硬件保持 pending 不自清</td></tr>
+<tr><td>17</td><td>未定义伪中断行为</td><td>驱动遇到 STATUS=0 时报错死循环</td><td>spec 声明伪中断可能发生（<a href="#11-2">§11.2</a>）</td></tr>
+</table>
+
+<h2 id="14">14. 验证要点与覆盖率</h2>
+
+<h3>14.1 必测场景</h3>
+<table>
+<tr><th>类别</th><th>场景</th></tr>
+<tr><td><strong>基本功能</strong></td><td>每个源单独触发 → RAW 置位 → STATUS 正确 → IRQ 拉高 → 清除 → IRQ 撤销</td></tr>
+<tr><td><strong>屏蔽</strong></td><td>屏蔽状态下触发 → RAW 有、STATUS 无、IRQ 不拉；解除屏蔽后 IRQ 立刻拉高（<strong>验证事件未丢</strong>）</td></tr>
+<tr><td><strong>逐级屏蔽</strong></td><td>L1/L2/L3/L4 每一层单独关闭，确认现象符合 <a href="#4-3">§4.3</a> 的表格</td></tr>
+<tr><td><strong>清除竞争</strong></td><td><strong>清除与事件同拍</strong>（必须验证置位优先）；清除早 1 拍 / 晚 1 拍</td></tr>
+<tr><td><strong>背靠背事件</strong></td><td>连续多拍事件、清除期间持续事件、overflow 标志正确性</td></tr>
+<tr><td><strong>多源并发</strong></td><td>所有源同时置位；部分清除；随机子集清除</td></tr>
+<tr><td><strong>电平型</strong></td><td>条件持续 → IRQ 持续；条件消失 → IRQ 自动撤销；只写 CLR 不消除根因 → IRQ 不撤销</td></tr>
+<tr><td><strong>边沿型</strong></td><td>条件持续高 → 只触发一次；条件拉低再拉高 → 再触发</td></tr>
+<tr><td><strong>CDC</strong></td><td>源时钟与寄存器时钟各种频率比（含极端比）、相位随机化；窄脉冲（最小宽度）</td></tr>
+<tr><td><strong>复位</strong></td><td>复位中触发事件；复位撤离瞬间检查无虚假 IRQ；mask 复位值正确</td></tr>
+<tr><td><strong>低功耗</strong></td><td>时钟门控期间事件 → 恢复后 pending 仍在；唤醒源正确唤醒</td></tr>
+<tr><td><strong>伪中断</strong></td><td>IRQ 拉高后立刻被其他路径清掉，CPU 读 STATUS 为 0 的场景</td></tr>
+<tr><td><strong>软件强制</strong></td><td><code>INT_FORCE</code> 能正确触发，且可被正常清除</td></tr>
+</table>
+
+<h3>14.2 SVA 断言</h3>
+<pre><code>// (1) 事件发生后 pending 必须置位（除非同拍被清且清除优先——本设计不允许）
+property p_event_sets_pending;
+    @(posedge clk) disable iff (!rst_n)
+        event_vec[i] |=&gt; int_raw_o[i];
+endproperty
+a_set_prio: assert property (p_event_sets_pending)
+    else $error("INT: event lost, set priority violated!");
+
+// (2) 未发生事件时 pending 不能自己置位
+property p_no_spurious_set;
+    @(posedge clk) disable iff (!rst_n)
+        (!int_raw_o[i] &amp;&amp; !event_vec[i]) |=&gt; !int_raw_o[i];
+endproperty
+a_no_spurious: assert property (p_no_spurious_set);
+
+// (3) pending 只能被 clr 清除（边沿模式）
+property p_clr_only;
+    @(posedge clk) disable iff (!rst_n)
+        (int_raw_o[i] &amp;&amp; cfg_edge_mode[i] &amp;&amp; $fell(int_raw_o[i]))
+            |-&gt; $past(clr_vec[i]);
+endproperty
+a_clr_only: assert property (p_clr_only)
+    else $error("INT: pending cleared without software clear!");
+
+// (4) 屏蔽状态下 IRQ 不能拉高
+a_mask_works: assert property (@(posedge clk) disable iff (!rst_n)
+    (int_mask_o == '0) |-&gt; !irq_o);
+
+// (5) STATUS 必须等于 RAW &amp; MASK（组合一致性）
+a_status_eq: assert property (@(posedge clk)
+    int_status_o == (int_raw_o &amp; int_mask_o));
+
+// (6) 解除屏蔽后，若 RAW 有效则 IRQ 必须拉起（事件不丢）
+property p_unmask_reassert;
+    @(posedge clk) disable iff (!rst_n)
+        ($rose(int_mask_o[i]) &amp;&amp; int_raw_o[i]) |-&gt; irq_o;
+endproperty
+a_unmask: assert property (p_unmask_reassert);
+
+// (7) 复位后 mask 必须全 0（中断全关）
+a_rst_mask: assert property (@(posedge clk)
+    $rose(rst_n) |-&gt; (int_mask_o == '0));</code></pre>
+
+<h3>14.3 覆盖率</h3>
+<table>
+<tr><th>覆盖项</th><th>怎么收</th></tr>
+<tr><td>每个中断源都被触发过</td><td>对 <code>event_vec</code> 每 bit 做 toggle coverage</td></tr>
+<tr><td>每个源的每种触发模式</td><td>cross: <code>源 ID × cfg_edge_mode × 极性</code></td></tr>
+<tr><td>清除与置位的时序关系</td><td>cross: <code>clr 事件 × event 事件</code> 的相对拍数分桶（-2/-1/0/+1/+2）</td></tr>
+<tr><td>屏蔽状态下的触发</td><td>cross: <code>event × mask 状态</code></td></tr>
+<tr><td>多源并发度</td><td><code>$countones(int_raw_o)</code> 分桶：1 / 2 / 多 / 全满</td></tr>
+<tr><td>overflow 发生</td><td><code>int_ovf_o</code> 每 bit 被置位过</td></tr>
+<tr><td>频率比</td><td>covergroup 覆盖源时钟 / 寄存器时钟的多种比值</td></tr>
+<tr><td>清除时的 IRQ 状态</td><td>清除时 IRQ 为 1 / 为 0 都要覆盖</td></tr>
+<tr><td>各层屏蔽组合</td><td>cross: L1 mask × L2 SUB_EN × L3 enable</td></tr>
+</table>
+
+<h2 id="15">15. 设计规范与签核清单</h2>
+
+<h3>15.1 设计规则</h3>
+<table>
+<tr><th>#</th><th>规则</th></tr>
+<tr><td>R1</td><td><strong>脉冲型中断源必须锁存成 pending</strong>，禁止把组合脉冲直接接到 IRQ 端口</td></tr>
+<tr><td>R2</td><td><strong>pending 置位优先于清除</strong>，OR 写在赋值的最外层</td></tr>
+<tr><td>R3</td><td><strong>mask/enable 复位值必须是"中断全关"</strong></td></tr>
+<tr><td>R4</td><td>同一芯片内 <strong>EN / MASK 极性统一</strong>，不得混用</td></tr>
+<tr><td>R5</td><td><strong>同时提供 RAW 和 STATUS</strong>，两者都可读、读无副作用</td></tr>
+<tr><td>R6</td><td>清除<strong>统一用 W1C</strong>，禁止读清除；确需读清除的须在手册显著标注</td></tr>
+<tr><td>R7</td><td><strong>聚合层只做组合 OR</strong>，不做二次锁存</td></tr>
+<tr><td>R8</td><td>异步源<strong>先各自同步再 OR</strong>，禁止先 OR 后同步</td></tr>
+<tr><td>R9</td><td>边沿检测的输入<strong>必须是已同步信号</strong></td></tr>
+<tr><td>R10</td><td>清除窗口<strong>只用总线 ACCESS 相位的一拍</strong></td></tr>
+<tr><td>R11</td><td><strong>每个中断源都必须有可写的屏蔽位</strong>（含 NMI 以外的所有源）</td></tr>
+<tr><td>R12</td><td>中断模块<strong>封装成公共库单元</strong>，各 IP 直接例化，禁止各写各的</td></tr>
+<tr><td>R13</td><td>唤醒通路独立于功能中断通路，<strong>不依赖可被关闭的时钟</strong></td></tr>
+<tr><td>R14</td><td>每个源在<strong>寄存器手册中明确标注</strong>：电平/边沿、极性、清除方式、是否影响唤醒</td></tr>
+</table>
+
+<h3>15.2 签核清单</h3>
+<table>
+<tr><th>#</th><th>检查项</th><th>通过标准</th></tr>
+<tr><td>1</td><td>中断清单文档</td><td>所有中断源、类型（电平/脉冲）、极性、清除方式、优先级、路由全部列出并 review</td></tr>
+<tr><td>2</td><td>类型一致性</td><td>RTL 实际行为 × 寄存器手册 × GIC/PLIC 的 <code>ICFGR</code> 配置 三者逐条核对一致</td></tr>
+<tr><td>3</td><td>置位优先</td><td>所有 pending 逻辑经 RTL review 确认 set 优先；SVA 已覆盖</td></tr>
+<tr><td>4</td><td>复位值</td><td>所有 mask/enable 复位后中断全关，已在仿真中验证</td></tr>
+<tr><td>5</td><td>CDC 检查</td><td>中断路径全部通过 CDC 工具；无先 OR 后同步；无未同步的边沿检测</td></tr>
+<tr><td>6</td><td>聚合层</td><td>确认无二次锁存</td></tr>
+<tr><td>7</td><td>清除机制</td><td>无读清除（或已书面例外）；W1C 行为经验证；清除-事件同拍场景已覆盖</td></tr>
+<tr><td>8</td><td>写缓冲说明</td><td>手册中已写明"写清后需读回"</td></tr>
+<tr><td>9</td><td>逐级屏蔽</td><td>每一层屏蔽关闭后的现象已逐条验证</td></tr>
+<tr><td>10</td><td>覆盖率</td><td>所有源 toggle 覆盖、清除时序分桶覆盖、多源并发度覆盖达标</td></tr>
+<tr><td>11</td><td>低功耗</td><td>唤醒源清单已 review；门控/断电期间 pending 保持已验证</td></tr>
+<tr><td>12</td><td>驱动联调</td><td>软件已在 FPGA/仿真平台上跑通每个中断，包括压力场景</td></tr>
+<tr><td>13</td><td>伪中断</td><td>spec 已声明；驱动已能正确处理 STATUS=0</td></tr>
+<tr><td>14</td><td>安全隔离</td><td>Secure/Non-secure 中断寄存器访问权限已验证</td></tr>
+</table>
+
+<div class="note">
+<p><strong>全文一句话总结</strong>：中断设计的正确性归结为三个判断——<strong>源是状态还是事件</strong>（决定电平型还是脉冲型，进而决定要不要锁存）、<strong>每一层的放行与拦截是否可见可控</strong>（RAW/MASK/STATUS 齐全、只锁存一次、逐级可查）、<strong>清除动作与新事件竞争时谁赢</strong>（必须置位优先，且软件清除要考虑写缓冲）。这三件事做对，中断就不会丢、不会卡、不会风暴。</p>
+</div>
+
+<footer>本文整理自一次关于数字芯片中断架构、分类、层级控制与清除机制的技术讨论。</footer>
+</div>
+<script>
+(function(){
+  var nav    = document.getElementById('nav');
+  var toggle = document.getElementById('nav-toggle');
+  var links  = [].slice.call(nav.querySelectorAll('a'));
+  var targets = links.map(function(a){
+    return document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  });
+  toggle.addEventListener('click', function(){ nav.classList.toggle('open'); });
+  nav.addEventListener('click', function(e){
+    if (e.target.tagName === 'A') nav.classList.remove('open');
+  });
+  function highlight(){
+    var i, cur = 0;
+    for (i = 0; i < targets.length; i++) {
+      if (targets[i] && targets[i].getBoundingClientRect().top <= 80) cur = i;
+    }
+    if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 4)
+      cur = targets.length - 1;
+    for (i = 0; i < links.length; i++) links[i].classList.toggle('active', i === cur);
+    var act = links[cur];
+    if (act.offsetTop < nav.scrollTop ||
+        act.offsetTop + act.offsetHeight > nav.scrollTop + nav.clientHeight) {
+      nav.scrollTop = act.offsetTop - nav.clientHeight / 2;
+    }
+  }
+  var pending = false;
+  window.addEventListener('scroll', function(){
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function(){ pending = false; highlight(); });
+  });
+  window.addEventListener('resize', highlight);
+  highlight();
+})();
+</script>
+</body>
+</html>
