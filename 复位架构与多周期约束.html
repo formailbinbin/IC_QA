@@ -715,24 +715,59 @@ report_analysis_coverage -status_details untested</code></pre>
 <tr><td><strong>recovery</strong></td><td>复位<strong>释放</strong>沿</td><td>复位撤销后，必须至少提前 <code>T_recovery</code> 稳定，才能迎接下一个时钟有效沿</td><td>类似 setup</td></tr>
 <tr><td><strong>removal</strong></td><td>复位<strong>释放</strong>沿</td><td>时钟有效沿之后，复位必须继续保持有效至少 <code>T_removal</code>，不能过早撤销</td><td>类似 hold</td></tr>
 </table>
-<div class="diagram">                    ┌──────── clk 有效沿
-                    │
-   ←─ recovery ──→  │  ←─ removal ──→
- ─────────────────┐ │ ┌───────────────
- rst_n            └─┼─┘
-                    │
-        ↑ 合法释放区在这个窗口之外
-        （落在窗口内 → 亚稳态）</div>
+<p>两个检查约束的都是<strong>同一个沿 —— 复位的撤离沿（图中 <code>D</code>）</strong>，它们从左右两侧共同圈出一个「<code>D</code> 不许落入」的禁止窗口。断言沿（图中 <code>A</code>）一并画出以作对照，但它<strong>不受这两个检查约束</strong>：</p>
+<div class="diagram">                                           clk 有效沿
+                                           v
+  clk      ________________________________/----------------------------
+                                           |
+                            [&lt;-recovery--&gt;|&lt;--removal--&gt;]
+                            [-------------+-------------]   &lt;- 禁止撤离的窗口
+                                           |
+  rst_n (1)----\________/-----------------------------------------------  合法：D 在窗口左侧
+               A        D                  |
+                                           |
+  rst_n (2)----\_____________________/----------------------------------  违例：D 落入窗口
+               A                     D     |
+                                           |
+  rst_n (3)----\_______________________________________________/--------  合法：D 在窗口右侧
+               A                                               D
+
+  图例： A = 断言沿（复位生效，下降）   D = 撤离沿（复位解除，上升）
+         _ = 复位有效（低电平）         - = 复位已撤离（高电平）</div>
+<div class="note">
+<p>看图要抓住三点：</p>
+<p>（1）<strong>只有 <code>D</code> 被 recovery/removal 检查</strong>。<code>A</code> 画在这里只是为了让波形完整 —— 断言沿的正确性由「最小复位脉宽 <code>t_rw</code>」保证（见 <a href="#1-5">1.5</a>），与这两个检查无关。所以三条波形的 <code>A</code> 都在同一列，变化的只有 <code>D</code>。</p>
+<p>（2）约束的是「<strong><code>D</code> 的位置</strong>」，不是「电平」。情形 (3) 中复位在整个窗口期间都保持有效低电平，这完全合法 —— 因为它的 <code>D</code> 在窗口之后。</p>
+<p>（3）窗口<strong>横跨</strong>时钟沿：设时钟沿为 0 时刻、<code>D</code> 在 <code>t</code> 时刻，则禁止区为 <code>−T_recovery &lt; t &lt; +T_removal</code>。recovery 管左半边，removal 管右半边。</p>
+</div>
 <h3 id="3-2">3.2 关键路径与 slack 公式</h3>
 <p>需要收敛的路径是：<strong>同步器末级 FF 的 Q 端 → 复位分发网络 → 目标 FF 的 RN 端</strong>。</p>
-<div class="formula">slack = T_period − T<sub>ck2q</sub>(r2) − T<sub>reset_tree</sub> − T<sub>recovery</sub> − uncertainty</div>
-<p>其中 <code>T_reset_tree</code> 是复位信号从同步器输出到最远 FF 复位端的组合延迟（含 buffer 树）。这条路径的发起点和捕获点用的是<strong>同一个时钟</strong>，所以默认按单周期检查——留给复位树的预算只有不到一个时钟周期。</p>
-<p>removal 方向则是另一边的约束：</p>
-<div class="formula">T<sub>reset_tree</sub> ≥ clk_tree_delay + T<sub>removal</sub> − T<sub>ck2q</sub></div>
+<p>为了让 recovery 与 removal 两式可比，先统一符号 —— 关键是<strong>把发起端与捕获端的时钟树延迟分开写</strong>：</p>
+<table>
+<tr><th>符号</th><th>含义</th></tr>
+<tr><td><code>T</code></td><td>时钟周期</td></tr>
+<tr><td><code>T<sub>clk_launch</sub></code></td><td>时钟树延迟：时钟源 → <strong>同步器末级 FF</strong> 的 CK 端</td></tr>
+<tr><td><code>T<sub>clk_capture</sub></code></td><td>时钟树延迟：时钟源 → <strong>目标 FF</strong> 的 CK 端</td></tr>
+<tr><td><code>T<sub>ck2q</sub></code></td><td>同步器末级 FF 的 CK → Q 延迟</td></tr>
+<tr><td><code>T<sub>reset_tree</sub></code></td><td>复位分发网络延迟：同步器 Q → 目标 FF 的 RN 端</td></tr>
+<tr><td><code>skew</code></td><td><code>T<sub>clk_capture</sub> − T<sub>clk_launch</sub></code></td></tr>
+</table>
+<p>撤离沿到达目标 FF 的 RN 端的绝对时刻为 <code>T<sub>clk_launch</sub> + T<sub>ck2q</sub> + T<sub>reset_tree</sub></code>。把它代入 3.1 的禁止窗口，两个方向就是窗口的两条边界：</p>
+<p><strong>recovery（撤离沿必须早于捕获沿 T<sub>recovery</sub> 以上）</strong>，捕获沿取下一拍 <code>T + T<sub>clk_capture</sub></code>：</p>
+<div class="formula">slack<sub>rec</sub> = (T + T<sub>clk_capture</sub>) − (T<sub>clk_launch</sub> + T<sub>ck2q</sub> + T<sub>reset_tree</sub>) − T<sub>recovery</sub> − uncertainty</div>
+<p><strong>removal（撤离沿必须晚于捕获沿 T<sub>removal</sub> 以上）</strong>，捕获沿取同一拍 <code>T<sub>clk_capture</sub></code>：</p>
+<div class="formula">slack<sub>rem</sub> = (T<sub>clk_launch</sub> + T<sub>ck2q</sub> + T<sub>reset_tree</sub>) − T<sub>clk_capture</sub> − T<sub>removal</sub></div>
+<p>令两式 slack ≥ 0，整理后得到复位树延迟的允许区间：</p>
 <div class="warn">
 <p><strong>双边夹击</strong>：复位树延迟被两侧同时挤压，必须落在这个窗口内：</p>
+<div class="formula">skew + T<sub>removal</sub> − T<sub>ck2q</sub> ≤ T<sub>reset_tree</sub> ≤ skew + T − T<sub>recovery</sub> − T<sub>ck2q</sub> − uncertainty</div>
+<p>窗口宽度为 <code>T − T<sub>recovery</sub> − T<sub>removal</sub> − uncertainty</code> —— <strong>只和时钟周期有关，与时钟树延迟无关</strong>。这正是 <a href="#4-1">4.1</a> 里高频下预算不可解的根源。</p>
+<p>窗口的<strong>位置</strong>则由 <code>skew</code> 决定：这意味着<strong>复位树延迟必须跟随时钟树的 skew 走</strong>。复位树太快会违反 removal，太慢会违反 recovery。</p>
+</div>
+<div class="note">
+<p>若忽略 <code>T<sub>ck2q</sub></code>、<code>uncertainty</code>，并设 launch 端时钟延迟为 0（即 <code>skew = T<sub>clk_capture</sub></code>），上式就退化成常见的简写形式：</p>
 <p><code>clk_tree_delay ≤ T_reset_tree ≤ clk_tree_delay + T − T_recovery</code></p>
-<p>这意味着<strong>复位树的延迟必须与时钟树的延迟大致匹配</strong>。复位树太快会违反 removal，太慢会违反 recovery。</p>
+<p>工程上快速估算可以这么用，但要清楚它<strong>隐含了 launch 端无时钟延迟</strong>这个假设。</p>
 </div>
 <h3 id="3-3">3.3 SDC 约束要点</h3>
 <h4>（1）原始异步复位的输入端</h4>
