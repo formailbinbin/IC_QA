@@ -108,6 +108,18 @@
   .no{color:var(--no);font-weight:600;}
   .wn{color:var(--warn);font-weight:600;}
 
+  /* SVG 图示 */
+  figure.fig{
+    background:var(--card);border:1px solid var(--line);
+    border-radius:10px;padding:20px 18px 14px;margin:16px 0 20px;
+    text-align:center;overflow-x:auto;
+  }
+  figure.fig svg{max-width:100%;height:auto;}
+  figure.fig figcaption{
+    margin-top:12px;font-size:13px;color:var(--sub);
+  }
+  svg text{font-family:Consolas,"Microsoft YaHei",monospace;}
+
   @media (max-width:900px){
     nav{display:none;}
     main{padding:22px 16px 60px;}
@@ -163,6 +175,7 @@
     <li><a class="lv2" href="#s88">8.8 要点速查</a></li>
     <li><a class="lv2" href="#s89">8.9 Scan 时钟 vs 功能时钟</a></li>
     <li><a class="lv2" href="#s810">8.10 Scan 测试模式分类</a></li>
+    <li><a class="lv2" href="#s811">8.11 结构图：DFF / Scan Cell / Chain</a></li>
   </ol>
 </nav>
 
@@ -1045,6 +1058,405 @@ Shift(慢)... → 最后一拍shift当launch → SE快速翻转 → capture拍(�
   <div class="note">
     <b>一句话区分：</b>Chain test 测"链自己"；Stuck-at 测"通不通"；Transition / Path 测"快不快"；IDDQ 测"漏不漏"。前三者都靠 Shift + Capture，区别只在 capture 几拍、拍间多快。
   </div>
+
+  <h3 class="sec" id="s811"><span class="no">8.11</span>结构图：DFF / Scan Cell / Scan Chain</h3>
+
+  <h4 style="margin:26px 0 8px;font-size:16px;">一、普通 D 触发器（DFF）</h4>
+  <figure class="fig">
+    <svg viewBox="0 0 520 200" width="520">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+          <polygon points="0 0, 9 3.5, 0 7" fill="#2b2f36"/>
+        </marker>
+      </defs>
+      <!-- flop body -->
+      <rect x="180" y="40" width="150" height="120" rx="6" fill="#eaf1ff" stroke="#2563eb" stroke-width="2"/>
+      <text x="255" y="30" font-size="13" fill="#2563eb" text-anchor="middle" font-weight="bold">DFF</text>
+      <!-- clock triangle -->
+      <polygon points="180,112 196,120 180,128" fill="none" stroke="#2563eb" stroke-width="2"/>
+      <!-- pin labels inside -->
+      <text x="192" y="78" font-size="13" fill="#2b2f36">D</text>
+      <text x="318" y="78" font-size="13" fill="#2b2f36" text-anchor="end">Q</text>
+      <text x="318" y="140" font-size="13" fill="#2b2f36" text-anchor="end">QN</text>
+      <text x="200" y="155" font-size="12" fill="#2b2f36">RN</text>
+      <!-- wires -->
+      <line x1="80"  y1="73"  x2="178" y2="73"  stroke="#2b2f36" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="72" y="77" font-size="13" text-anchor="end">D</text>
+      <line x1="80"  y1="120" x2="178" y2="120" stroke="#2b2f36" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="72" y="124" font-size="13" text-anchor="end">CLK</text>
+      <line x1="255" y1="190" x2="255" y2="162" stroke="#2b2f36" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="262" y="188" font-size="13">RST_N</text>
+      <line x1="332" y1="73"  x2="440" y2="73"  stroke="#2b2f36" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="448" y="77" font-size="13">Q</text>
+      <line x1="332" y1="135" x2="440" y2="135" stroke="#2b2f36" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="448" y="139" font-size="13">QN</text>
+    </svg>
+    <figcaption>图 8.11-1　普通 D 触发器引脚结构（上升沿触发 + 异步低有效复位）</figcaption>
+  </figure>
+
+  <table>
+    <tr><th style="width:110px">RST_N</th><th style="width:110px">CLK</th><th style="width:90px">D</th><th>Q (next)</th></tr>
+    <tr><td>0</td><td>×</td><td>×</td><td>0（异步复位）</td></tr>
+    <tr><td>1</td><td>↑</td><td>0</td><td>0</td></tr>
+    <tr><td>1</td><td>↑</td><td>1</td><td>1</td></tr>
+    <tr><td>1</td><td>其他</td><td>×</td><td>Q（保持）</td></tr>
+  </table>
+<pre><span class="k">always</span> @(<span class="k">posedge</span> clk <span class="k">or</span> <span class="k">negedge</span> rst_n)
+    <span class="k">if</span> (!rst_n) q &lt;= 1'b0;
+    <span class="k">else</span>        q &lt;= d;</pre>
+
+  <h4 style="margin:30px 0 8px;font-size:16px;">二、Scan Cell（SDFF = Mux-D Scan Flip-Flop）</h4>
+  <figure class="fig">
+    <svg viewBox="0 0 640 240" width="640">
+      <!-- outer boundary -->
+      <rect x="110" y="20" width="430" height="200" rx="8" fill="none" stroke="#9aa3b2" stroke-width="1.5" stroke-dasharray="6 4"/>
+      <text x="325" y="14" font-size="13" fill="#6b7280" text-anchor="middle">SDFF（Scan D Flip-Flop）</text>
+      <!-- MUX trapezoid -->
+      <polygon points="170,55 215,75 215,145 170,165" fill="#fff7e6" stroke="#d97706" stroke-width="2"/>
+      <text x="179" y="78" font-size="12" fill="#2b2f36">0</text>
+      <text x="179" y="152" font-size="12" fill="#2b2f36">1</text>
+      <text x="192" y="118" font-size="12" fill="#d97706" text-anchor="middle" font-weight="bold">MUX</text>
+      <!-- DFF -->
+      <rect x="300" y="60" width="140" height="110" rx="6" fill="#eaf1ff" stroke="#2563eb" stroke-width="2"/>
+      <text x="370" y="52" font-size="13" fill="#2563eb" text-anchor="middle" font-weight="bold">DFF</text>
+      <polygon points="300,118 316,126 300,134" fill="none" stroke="#2563eb" stroke-width="2"/>
+      <text x="312" y="90" font-size="12">D</text>
+      <text x="430" y="90" font-size="12" text-anchor="end">Q</text>
+      <text x="320" y="160" font-size="12">RN</text>
+      <!-- inputs -->
+      <line x1="30" y1="72" x2="168" y2="72" stroke="#2b2f36" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="24" y="76" font-size="13" text-anchor="end">D</text>
+      <line x1="30" y1="148" x2="168" y2="148" stroke="#16a34a" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="24" y="152" font-size="13" text-anchor="end" fill="#16a34a">SI</text>
+      <!-- SE into mux select -->
+      <line x1="30" y1="205" x2="192" y2="205" stroke="#dc2626" stroke-width="2"/>
+      <line x1="192" y1="205" x2="192" y2="167" stroke="#dc2626" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="24" y="209" font-size="13" text-anchor="end" fill="#dc2626">SE</text>
+      <!-- mux out to dff -->
+      <line x1="217" y1="110" x2="298" y2="110" stroke="#2b2f36" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="257" y="103" font-size="11" fill="#6b7280" text-anchor="middle">d_int</text>
+      <!-- clk -->
+      <line x1="30" y1="126" x2="298" y2="126" stroke="#9aa3b2" stroke-width="0"/>
+      <line x1="245" y1="126" x2="298" y2="126" stroke="#2b2f36" stroke-width="2" marker-end="url(#ar)"/>
+      <line x1="245" y1="126" x2="245" y2="232" stroke="#2b2f36" stroke-width="2"/>
+      <text x="252" y="232" font-size="13">CLK</text>
+      <!-- output -->
+      <line x1="442" y1="90" x2="600" y2="90" stroke="#2b2f36" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="608" y="94" font-size="13">Q</text>
+    </svg>
+    <figcaption>图 8.11-2　Mux-D 型 Scan Cell 内部结构：D 端前插入二选一 MUX，由 SE 选择</figcaption>
+  </figure>
+
+  <figure class="fig">
+    <svg viewBox="0 0 680 190" width="680">
+      <text x="170" y="20" font-size="13" font-weight="bold" fill="#2563eb" text-anchor="middle">SE = 0　功能 / Capture 模式</text>
+      <text x="510" y="20" font-size="13" font-weight="bold" fill="#16a34a" text-anchor="middle">SE = 1　Shift 模式</text>
+      <line x1="340" y1="30" x2="340" y2="180" stroke="#e3e6eb" stroke-width="2"/>
+
+      <!-- left: SE=0 -->
+      <rect x="200" y="70" width="90" height="50" rx="5" fill="#eaf1ff" stroke="#2563eb" stroke-width="2"/>
+      <text x="245" y="100" font-size="12" text-anchor="middle" fill="#2563eb">DFF</text>
+      <line x1="45" y1="70" x2="198" y2="88" stroke="#2563eb" stroke-width="3" marker-end="url(#ar)"/>
+      <text x="38" y="74" font-size="12" text-anchor="end">D</text>
+      <line x1="45" y1="140" x2="190" y2="110" stroke="#c9ced8" stroke-width="2" stroke-dasharray="5 4"/>
+      <text x="38" y="144" font-size="12" text-anchor="end" fill="#9aa3b2">SI</text>
+      <text x="150" y="128" font-size="11" fill="#9aa3b2">断开</text>
+      <line x1="292" y1="95" x2="330" y2="95" stroke="#2b2f36" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="170" y="172" font-size="12" fill="#6b7280" text-anchor="middle">数据走功能组合逻辑</text>
+
+      <!-- right: SE=1 -->
+      <rect x="545" y="70" width="90" height="50" rx="5" fill="#eafaf0" stroke="#16a34a" stroke-width="2"/>
+      <text x="590" y="100" font-size="12" text-anchor="middle" fill="#16a34a">DFF</text>
+      <line x1="390" y1="70" x2="535" y2="88" stroke="#c9ced8" stroke-width="2" stroke-dasharray="5 4"/>
+      <text x="383" y="74" font-size="12" text-anchor="end" fill="#9aa3b2">D</text>
+      <text x="495" y="70" font-size="11" fill="#9aa3b2">断开</text>
+      <line x1="390" y1="140" x2="543" y2="110" stroke="#16a34a" stroke-width="3" marker-end="url(#ar)"/>
+      <text x="383" y="144" font-size="12" text-anchor="end" fill="#16a34a">SI</text>
+      <line x1="637" y1="95" x2="672" y2="95" stroke="#2b2f36" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="510" y="172" font-size="12" fill="#6b7280" text-anchor="middle">数据走上一级 flop 的 Q</text>
+    </svg>
+    <figcaption>图 8.11-3　SE 控制下的两条数据通路</figcaption>
+  </figure>
+
+  <table>
+    <tr><th style="width:110px">端口</th><th style="width:100px">方向</th><th>说明</th></tr>
+    <tr><td>D</td><td>in</td><td>功能数据输入（来自组合逻辑）</td></tr>
+    <tr><td><b>SI</b></td><td>in</td><td>Scan In，来自链上<b>前一级</b>的 Q</td></tr>
+    <tr><td><b>SE</b></td><td>in</td><td>Scan Enable，全芯片并联</td></tr>
+    <tr><td>CLK</td><td>in</td><td>时钟，与功能共用同一棵时钟树</td></tr>
+    <tr><td>RN</td><td>in</td><td>异步复位（测试时需 bypass 可控）</td></tr>
+    <tr><td>Q</td><td>out</td><td>既驱动功能逻辑，也驱动<b>下一级</b>的 SI</td></tr>
+  </table>
+<pre><span class="c">// 行为模型</span>
+<span class="k">assign</span> d_int = se ? si : d;
+<span class="k">always</span> @(<span class="k">posedge</span> clk <span class="k">or</span> <span class="k">negedge</span> rn)
+    <span class="k">if</span> (!rn) q &lt;= 1'b0;
+    <span class="k">else</span>     q &lt;= d_int;</pre>
+
+  <h4 style="margin:30px 0 8px;font-size:16px;">三、Scan Chain（扫描链）</h4>
+  <figure class="fig">
+    <svg viewBox="0 0 760 230" width="760">
+      <!-- 4 scan cells -->
+      <g>
+        <rect x="90"  y="70" width="110" height="80" rx="6" fill="#eaf1ff" stroke="#2563eb" stroke-width="2"/>
+        <rect x="250" y="70" width="110" height="80" rx="6" fill="#eaf1ff" stroke="#2563eb" stroke-width="2"/>
+        <rect x="410" y="70" width="110" height="80" rx="6" fill="#eaf1ff" stroke="#2563eb" stroke-width="2"/>
+        <rect x="570" y="70" width="110" height="80" rx="6" fill="#eaf1ff" stroke="#2563eb" stroke-width="2"/>
+        <text x="145" y="62" font-size="12" fill="#2563eb" text-anchor="middle" font-weight="bold">SDFF0</text>
+        <text x="305" y="62" font-size="12" fill="#2563eb" text-anchor="middle" font-weight="bold">SDFF1</text>
+        <text x="465" y="62" font-size="12" fill="#2563eb" text-anchor="middle" font-weight="bold">SDFF2</text>
+        <text x="625" y="62" font-size="12" fill="#2563eb" text-anchor="middle" font-weight="bold">SDFF3</text>
+      </g>
+      <!-- internal labels -->
+      <g font-size="11" fill="#2b2f36">
+        <text x="98"  y="95">SI</text><text x="192" y="95" text-anchor="end">Q</text>
+        <text x="258" y="95">SI</text><text x="352" y="95" text-anchor="end">Q</text>
+        <text x="418" y="95">SI</text><text x="512" y="95" text-anchor="end">Q</text>
+        <text x="578" y="95">SI</text><text x="672" y="95" text-anchor="end">Q</text>
+        <text x="98"  y="140">D</text><text x="258" y="140">D</text>
+        <text x="418" y="140">D</text><text x="578" y="140">D</text>
+      </g>
+      <!-- chain links -->
+      <g stroke="#16a34a" stroke-width="2.5" fill="none">
+        <line x1="20"  y1="90" x2="88"  y2="90" marker-end="url(#ar)"/>
+        <line x1="202" y1="90" x2="248" y2="90" marker-end="url(#ar)"/>
+        <line x1="362" y1="90" x2="408" y2="90" marker-end="url(#ar)"/>
+        <line x1="522" y1="90" x2="568" y2="90" marker-end="url(#ar)"/>
+        <line x1="682" y1="90" x2="745" y2="90" marker-end="url(#ar)"/>
+      </g>
+      <text x="16" y="82" font-size="12" fill="#16a34a" text-anchor="end">SI</text>
+      <text x="750" y="82" font-size="12" fill="#16a34a">SO</text>
+      <!-- functional D inputs -->
+      <g stroke="#9aa3b2" stroke-width="1.6" fill="none">
+        <line x1="50"  y1="135" x2="88"  y2="135" marker-end="url(#ar)"/>
+        <line x1="210" y1="135" x2="248" y2="135" marker-end="url(#ar)"/>
+        <line x1="370" y1="135" x2="408" y2="135" marker-end="url(#ar)"/>
+        <line x1="530" y1="135" x2="568" y2="135" marker-end="url(#ar)"/>
+      </g>
+      <g font-size="11" fill="#6b7280">
+        <text x="46"  y="132" text-anchor="end">D0</text>
+        <text x="206" y="132" text-anchor="end">D1</text>
+        <text x="366" y="132" text-anchor="end">D2</text>
+        <text x="526" y="132" text-anchor="end">D3</text>
+      </g>
+      <!-- SE bus -->
+      <line x1="20" y1="28" x2="730" y2="28" stroke="#dc2626" stroke-width="2"/>
+      <g stroke="#dc2626" stroke-width="2">
+        <line x1="145" y1="28" x2="145" y2="68" marker-end="url(#ar)"/>
+        <line x1="305" y1="28" x2="305" y2="68" marker-end="url(#ar)"/>
+        <line x1="465" y1="28" x2="465" y2="68" marker-end="url(#ar)"/>
+        <line x1="625" y1="28" x2="625" y2="68" marker-end="url(#ar)"/>
+      </g>
+      <text x="16" y="24" font-size="12" fill="#dc2626" text-anchor="end">SE</text>
+      <!-- CLK bus -->
+      <line x1="20" y1="200" x2="730" y2="200" stroke="#7c3aed" stroke-width="2"/>
+      <g stroke="#7c3aed" stroke-width="2">
+        <line x1="145" y1="200" x2="145" y2="152" marker-end="url(#ar)"/>
+        <line x1="305" y1="200" x2="305" y2="152" marker-end="url(#ar)"/>
+        <line x1="465" y1="200" x2="465" y2="152" marker-end="url(#ar)"/>
+        <line x1="625" y1="200" x2="625" y2="152" marker-end="url(#ar)"/>
+      </g>
+      <text x="16" y="204" font-size="12" fill="#7c3aed" text-anchor="end">CLK</text>
+      <text x="400" y="222" font-size="11" fill="#7c3aed" text-anchor="middle">同一棵时钟树</text>
+    </svg>
+    <figcaption>图 8.11-4　Scan Chain 串联结构：Q → 下一级 SI，SE 与 CLK 全局并联</figcaption>
+  </figure>
+
+  <figure class="fig">
+    <svg viewBox="0 0 740 330" width="740">
+      <!-- combinational cloud -->
+      <rect x="150" y="55" width="440" height="90" rx="14" fill="#fff7e6" stroke="#d97706" stroke-width="2"/>
+      <text x="370" y="105" font-size="15" fill="#d97706" text-anchor="middle" font-weight="bold">组合逻辑 (Combinational)</text>
+      <!-- PI -->
+      <line x1="40" y1="80" x2="148" y2="80" stroke="#2b2f36" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="34" y="84" font-size="13" text-anchor="end">PI</text>
+      <!-- PO -->
+      <line x1="592" y1="80" x2="700" y2="80" stroke="#2b2f36" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="708" y="84" font-size="13">PO</text>
+      <!-- PPI up arrows (from chain to logic) -->
+      <g stroke="#16a34a" stroke-width="2.5">
+        <line x1="210" y1="235" x2="210" y2="147" marker-end="url(#ar)"/>
+        <line x1="270" y1="235" x2="270" y2="147" marker-end="url(#ar)"/>
+        <line x1="330" y1="235" x2="330" y2="147" marker-end="url(#ar)"/>
+      </g>
+      <text x="270" y="190" font-size="12" fill="#16a34a" text-anchor="middle">PPI（flop 的 Q）</text>
+      <!-- PPO down arrows (from logic to chain) -->
+      <g stroke="#dc2626" stroke-width="2.5">
+        <line x1="440" y1="147" x2="440" y2="233" marker-end="url(#ar)"/>
+        <line x1="500" y1="147" x2="500" y2="233" marker-end="url(#ar)"/>
+        <line x1="560" y1="147" x2="560" y2="233" marker-end="url(#ar)"/>
+      </g>
+      <text x="500" y="190" font-size="12" fill="#dc2626" text-anchor="middle">PPO（flop 的 D）</text>
+      <!-- chain box -->
+      <rect x="90" y="235" width="560" height="60" rx="8" fill="#f0f3f8" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 4"/>
+      <g fill="#eaf1ff" stroke="#2563eb" stroke-width="1.8">
+        <rect x="150" y="250" width="56" height="30" rx="4"/>
+        <rect x="222" y="250" width="56" height="30" rx="4"/>
+        <rect x="294" y="250" width="56" height="30" rx="4"/>
+        <rect x="366" y="250" width="56" height="30" rx="4"/>
+        <rect x="438" y="250" width="56" height="30" rx="4"/>
+        <rect x="510" y="250" width="56" height="30" rx="4"/>
+      </g>
+      <g font-size="10" fill="#2563eb" text-anchor="middle">
+        <text x="178" y="270">FF</text><text x="250" y="270">FF</text><text x="322" y="270">FF</text>
+        <text x="394" y="270">FF</text><text x="466" y="270">FF</text><text x="538" y="270">FF</text>
+      </g>
+      <g stroke="#16a34a" stroke-width="2" fill="none">
+        <line x1="108" y1="265" x2="148" y2="265" marker-end="url(#ar)"/>
+        <line x1="208" y1="265" x2="220" y2="265" marker-end="url(#ar)"/>
+        <line x1="280" y1="265" x2="292" y2="265" marker-end="url(#ar)"/>
+        <line x1="352" y1="265" x2="364" y2="265" marker-end="url(#ar)"/>
+        <line x1="424" y1="265" x2="436" y2="265" marker-end="url(#ar)"/>
+        <line x1="496" y1="265" x2="508" y2="265" marker-end="url(#ar)"/>
+        <line x1="568" y1="265" x2="632" y2="265" marker-end="url(#ar)"/>
+      </g>
+      <text x="40" y="269" font-size="13" fill="#16a34a">SI</text>
+      <line x1="56" y1="265" x2="88" y2="265" stroke="#16a34a" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="660" y="269" font-size="13" fill="#16a34a">SO</text>
+      <text x="370" y="312" font-size="12" fill="#6b7280" text-anchor="middle">Scan Chain</text>
+    </svg>
+    <figcaption>图 8.11-5　Scan 的核心思想：PPI / PPO 把时序电路测试降维为组合电路测试</figcaption>
+  </figure>
+
+  <div class="note">
+    <b>核心思想：</b>PPI 相当于额外的输入引脚，PPO 相当于额外的输出引脚。<br>
+    <b>SE=1</b> 时链打通，可从 SI 控制 PPI、从 SO 观测 PPO；<b>SE=0</b> 时链断开，组合逻辑结果 PPO 被捕获进 flop。
+  </div>
+
+  <figure class="fig">
+    <svg viewBox="0 0 740 300" width="740">
+      <!-- decompressor -->
+      <polygon points="120,110 180,80 180,210 120,180" fill="#eafaf0" stroke="#16a34a" stroke-width="2"/>
+      <text x="150" y="140" font-size="11" fill="#16a34a" text-anchor="middle">Decom-</text>
+      <text x="150" y="156" font-size="11" fill="#16a34a" text-anchor="middle">pressor</text>
+      <!-- compactor -->
+      <polygon points="560,80 620,110 620,180 560,210" fill="#fdecec" stroke="#dc2626" stroke-width="2"/>
+      <text x="590" y="140" font-size="11" fill="#dc2626" text-anchor="middle">Compa-</text>
+      <text x="590" y="156" font-size="11" fill="#dc2626" text-anchor="middle">ctor</text>
+      <!-- input -->
+      <line x1="30" y1="145" x2="118" y2="145" stroke="#2b2f36" stroke-width="3" marker-end="url(#ar)"/>
+      <text x="74" y="136" font-size="12" text-anchor="middle">si[0:9]</text>
+      <text x="74" y="172" font-size="11" fill="#6b7280" text-anchor="middle">10 bit</text>
+      <!-- output -->
+      <line x1="622" y1="145" x2="712" y2="145" stroke="#2b2f36" stroke-width="3" marker-end="url(#ar)"/>
+      <text x="668" y="136" font-size="12" text-anchor="middle">so[0:9]</text>
+      <text x="668" y="172" font-size="11" fill="#6b7280" text-anchor="middle">10 bit</text>
+      <!-- chains -->
+      <g>
+        <rect x="235" y="60"  width="270" height="26" rx="4" fill="#eaf1ff" stroke="#2563eb" stroke-width="1.5"/>
+        <rect x="235" y="100" width="270" height="26" rx="4" fill="#eaf1ff" stroke="#2563eb" stroke-width="1.5"/>
+        <rect x="235" y="140" width="270" height="26" rx="4" fill="#eaf1ff" stroke="#2563eb" stroke-width="1.5"/>
+        <rect x="235" y="204" width="270" height="26" rx="4" fill="#eaf1ff" stroke="#2563eb" stroke-width="1.5"/>
+      </g>
+      <g font-size="11" fill="#2563eb" text-anchor="middle">
+        <text x="370" y="78">chain 1 ─ [FF][FF][FF][FF]</text>
+        <text x="370" y="118">chain 2 ─ [FF][FF][FF][FF]</text>
+        <text x="370" y="158">chain 3 ─ [FF][FF][FF][FF]</text>
+        <text x="370" y="222">chain N ─ [FF][FF][FF][FF]</text>
+      </g>
+      <text x="370" y="190" font-size="16" fill="#9aa3b2" text-anchor="middle">⋮</text>
+      <!-- fanout lines -->
+      <g stroke="#16a34a" stroke-width="1.6" fill="none">
+        <line x1="182" y1="130" x2="233" y2="73"  marker-end="url(#ar)"/>
+        <line x1="182" y1="138" x2="233" y2="113" marker-end="url(#ar)"/>
+        <line x1="182" y1="150" x2="233" y2="153" marker-end="url(#ar)"/>
+        <line x1="182" y1="162" x2="233" y2="217" marker-end="url(#ar)"/>
+      </g>
+      <g stroke="#dc2626" stroke-width="1.6" fill="none">
+        <line x1="507" y1="73"  x2="558" y2="130" marker-end="url(#ar)"/>
+        <line x1="507" y1="113" x2="558" y2="138" marker-end="url(#ar)"/>
+        <line x1="507" y1="153" x2="558" y2="150" marker-end="url(#ar)"/>
+        <line x1="507" y1="217" x2="558" y2="162" marker-end="url(#ar)"/>
+      </g>
+      <text x="150" y="252" font-size="12" fill="#16a34a" text-anchor="middle">展开 10 → 2000</text>
+      <text x="370" y="266" font-size="12" fill="#6b7280" text-anchor="middle">2000 条内部短链</text>
+      <text x="590" y="252" font-size="12" fill="#dc2626" text-anchor="middle">压缩 2000 → 10</text>
+    </svg>
+    <figcaption>图 8.11-6　Scan Compression：Decompressor 展开 + Compactor 压缩，测试时间缩短 50×~400×</figcaption>
+  </figure>
+
+  <figure class="fig">
+    <svg viewBox="0 0 760 270" width="760">
+      <!-- phase regions -->
+      <rect x="90"  y="24" width="250" height="196" fill="#eafaf0" opacity=".5"/>
+      <rect x="340" y="24" width="90"  height="196" fill="#fff7e6" opacity=".7"/>
+      <rect x="430" y="24" width="250" height="196" fill="#eafaf0" opacity=".5"/>
+      <text x="215" y="18" font-size="12" fill="#16a34a" text-anchor="middle">Shift In（n 拍）</text>
+      <text x="385" y="18" font-size="12" fill="#d97706" text-anchor="middle">Capture</text>
+      <text x="555" y="18" font-size="12" fill="#16a34a" text-anchor="middle">Shift Out（n 拍）</text>
+
+      <!-- SE waveform -->
+      <text x="80" y="55" font-size="13" text-anchor="end" fill="#dc2626">SE</text>
+      <polyline points="90,70 100,70 100,40 340,40 340,70 430,70 430,40 670,40 670,70 690,70"
+                fill="none" stroke="#dc2626" stroke-width="2.5"/>
+
+      <!-- CLK waveform -->
+      <text x="80" y="125" font-size="13" text-anchor="end" fill="#7c3aed">CLK</text>
+      <polyline points="90,130 110,130 110,100 140,100 140,130 170,130 170,100 200,100 200,130 230,130 230,100 260,100 260,130 290,130 290,100 320,100 320,130 340,130
+                        360,130 360,100 390,100 390,130 430,130
+                        450,130 450,100 480,100 480,130 510,130 510,100 540,100 540,130 570,130 570,100 600,100 600,130 630,130 630,100 655,100 655,130 690,130"
+                fill="none" stroke="#7c3aed" stroke-width="2"/>
+
+      <!-- SI -->
+      <text x="80" y="180" font-size="13" text-anchor="end">SI</text>
+      <line x1="90" y1="175" x2="340" y2="175" stroke="#2b2f36" stroke-width="2"/>
+      <g font-size="11" fill="#2b2f36" text-anchor="middle">
+        <text x="125" y="170">v0</text><text x="170" y="170">v1</text><text x="215" y="170">v2</text>
+        <text x="260" y="170">v3</text><text x="305" y="170">v4</text>
+      </g>
+      <line x1="340" y1="175" x2="690" y2="175" stroke="#c9ced8" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+      <!-- SO -->
+      <text x="80" y="218" font-size="13" text-anchor="end">SO</text>
+      <line x1="90" y1="213" x2="430" y2="213" stroke="#c9ced8" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <line x1="430" y1="213" x2="690" y2="213" stroke="#2b2f36" stroke-width="2"/>
+      <g font-size="11" fill="#2b2f36" text-anchor="middle">
+        <text x="465" y="208">r0</text><text x="510" y="208">r1</text><text x="555" y="208">r2</text>
+        <text x="600" y="208">r3</text><text x="645" y="208">r4</text>
+      </g>
+
+      <!-- captions -->
+      <text x="215" y="248" font-size="11" fill="#6b7280" text-anchor="middle">载入 ATPG 向量</text>
+      <text x="385" y="248" font-size="11" fill="#6b7280" text-anchor="middle">结果捕获回 flop</text>
+      <text x="555" y="248" font-size="11" fill="#6b7280" text-anchor="middle">移出与 Golden 比对</text>
+    </svg>
+    <figcaption>图 8.11-7　Shift / Capture / Shift 时序波形（SE 高为移位，低为捕获）</figcaption>
+  </figure>
+
+  <div class="card"><b>Chain Test 数据流（SE 全程 = 1，不经过任何组合逻辑）</b></div>
+<pre>SI: 0 0 1 1 0 0 1 1 0 0 1 1 ...
+         │
+         ▼  每拍右移一位
+   [FF][FF][FF][FF][FF][FF][FF][FF]
+                                 │
+                                 ▼
+SO: ..... 0 0 1 1 0 0 1 1   （延迟 n 拍后应与 SI 完全一致）
+
+<span class="c">✓ 相同 → 链完好
+✗ 不同 → 链断 / 短路 / SE 或 CLK 接错 → 芯片直接判死</span></pre>
+
+  <h4 style="margin:30px 0 8px;font-size:16px;">四、三者演进对比</h4>
+  <table>
+    <tr><th style="width:170px">结构</th><th style="width:230px">组成</th><th style="width:220px">能力</th><th>开销</th></tr>
+    <tr>
+      <td><b>① 普通 DFF</b></td>
+      <td>D + CLK + Q</td>
+      <td>内部不可控 / 不可观测</td>
+      <td>面积基准</td>
+    </tr>
+    <tr>
+      <td><b>② Scan Cell</b></td>
+      <td>DFF + 前置 MUX（SI / SE）</td>
+      <td>单个 flop 可被串行读写</td>
+      <td>+10~20% flop 面积<br>+1 级 MUX 功能路径延迟</td>
+    </tr>
+    <tr>
+      <td><b>③ Scan Chain</b></td>
+      <td>N 个 Scan Cell 首尾串联<br>SE / CLK 全局并联</td>
+      <td>全芯片 flop 变成一条"超长移位寄存器"<br>时序测试降维为组合测试</td>
+      <td>+ 链布线开销<br>+ shift 功耗（IR-Drop）</td>
+    </tr>
+  </table>
 
 </main>
 </div>
