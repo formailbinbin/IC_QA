@@ -151,6 +151,18 @@
     <li><a class="lv2" href="#s71">7.1 Scan 必须基于网表</a></li>
     <li><a class="lv2" href="#s72">7.2 MBIST 基于 RTL</a></li>
     <li><a class="lv2" href="#s73">7.3 层次对照表</a></li>
+
+    <li><a href="#ch8">第八章 专题：Scan 原理与流程</a></li>
+    <li><a class="lv2" href="#s81">8.1 为什么需要 Scan</a></li>
+    <li><a class="lv2" href="#s82">8.2 Scan Flop 结构</a></li>
+    <li><a class="lv2" href="#s83">8.3 Shift 与 Capture</a></li>
+    <li><a class="lv2" href="#s84">8.4 故障模型与 ATPG</a></li>
+    <li><a class="lv2" href="#s85">8.5 测试压缩</a></li>
+    <li><a class="lv2" href="#s86">8.6 完整实现流程</a></li>
+    <li><a class="lv2" href="#s87">8.7 流程总览图</a></li>
+    <li><a class="lv2" href="#s88">8.8 要点速查</a></li>
+    <li><a class="lv2" href="#s89">8.9 Scan 时钟 vs 功能时钟</a></li>
+    <li><a class="lv2" href="#s810">8.10 Scan 测试模式分类</a></li>
   </ol>
 </nav>
 
@@ -446,6 +458,593 @@
     <tr><td>Test Point Insertion</td><td>网表（部分工具支持 RTL 分析）</td><td>提升覆盖率</td></tr>
     <tr><td><b>Scan Reorder</b></td><td><b>PR 阶段</b></td><td>基于物理位置重排</td></tr>
   </table>
+
+  <!-- ============ 第八章 ============ -->
+  <h2 class="chapter" id="ch8">第八章　专题：Scan 原理与完整流程</h2>
+
+  <h3 class="sec" id="s81"><span class="no">8.1</span>为什么需要 Scan</h3>
+  <div class="card">
+    <b>问题的本质：可控性与可观测性</b><br>
+    芯片制造后可能存在物理缺陷（断线、短路、晶体管失效）。要测出来，必须：
+    <ul class="pt">
+      <li><b>可控性（Controllability）</b>：能把任意内部节点设成 0 或 1</li>
+      <li><b>可观测性（Observability）</b>：能把任意内部节点的值传到输出端口</li>
+    </ul>
+    纯组合电路很容易做到——直接从 PI 加激励、从 PO 看结果。但时序电路里有成千上万个触发器，它们的值只能靠时钟一拍拍推进，<b>从外部几乎无法直接控制 / 观测</b>。
+  </div>
+  <div class="note">
+    <b>Scan 的核心思想：</b>把所有触发器串成一条移位寄存器链，让触发器既能当"功能寄存器"，又能当"测试端口的延伸"。<br>
+    于是时序电路被"降维"成组合电路测试问题：<br>
+    · 触发器 Q 输出 → 组合逻辑的<b>伪主输入 PPI</b>（Pseudo Primary Input）<br>
+    · 触发器 D 输入 → 组合逻辑的<b>伪主输出 PPO</b>（Pseudo Primary Output）
+  </div>
+
+  <h3 class="sec" id="s82"><span class="no">8.2</span>Scan Flop 的结构</h3>
+  <div class="card">
+    <b>Mux-D Scan（最主流）</b>：把普通 DFF 换成 SDFF，在 D 端前加一个二选一 MUX。
+  </div>
+<pre>         ┌─────────────────────────┐
+  D ────▶│0                        │
+         │  MUX ──▶ D   ┌─────┐    │
+ SI ────▶│1             │ DFF │──▶ Q
+         │              └──▲──┘    │
+ SE ────▶│sel              │       │
+         └─────────────────┼───────┘
+  CLK ───────────────────── </pre>
+  <table>
+    <tr><th style="width:90px">SE</th><th style="width:220px">数据来源</th><th>模式</th></tr>
+    <tr><td>0</td><td>D（功能逻辑）</td><td>Functional / Capture</td></tr>
+    <tr><td>1</td><td>SI（上一级 Q）</td><td>Shift（移位）</td></tr>
+  </table>
+  <div class="card">
+    <b>代价：</b>
+    <ul class="pt">
+      <li>面积：每个 flop 增加一个 MUX，约 +10%~20% flop 面积</li>
+      <li>时序：功能路径上多一级 MUX 延迟（约 1 级门延迟）</li>
+      <li>布线：多出 scan 链的连线</li>
+    </ul>
+  </div>
+
+  <table>
+    <tr><th style="width:230px">Scan 风格</th><th>特点</th></tr>
+    <tr><td><b>Mux-D Scan</b></td><td>最常用，兼容性最好</td></tr>
+    <tr><td>Clocked Scan</td><td>用两个独立时钟（功能 / 移位）切换，无 MUX 延迟但时钟复杂</td></tr>
+    <tr><td>LSSD（Level-Sensitive Scan Design）</td><td>IBM 风格，锁存器 + 多相时钟，对时钟 skew 不敏感</td></tr>
+  </table>
+
+  <div class="card"><b>链的连接</b>：所有 flop 的 <b>SE 并联</b>到同一 <code>scan_enable</code> 端口，<b>CLK 并联</b>到 scan clock。</div>
+<pre>scan_in ──▶ FF0.SI
+            FF0.Q ──▶ FF1.SI
+                      FF1.Q ──▶ FF2.SI
+                                ...
+                                FFn.Q ──▶ scan_out</pre>
+
+  <h3 class="sec" id="s83"><span class="no">8.3</span>基本操作：Shift 与 Capture</h3>
+  <div class="card"><b>Stuck-at 测试（静态故障，三步法）</b></div>
+<pre>      ┌── Shift In (n cycles) ──┐  Capture  ┌── Shift Out (n cycles) ──┐
+SE   ─┘▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔└___________┘▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+CLK  ─┘│_│▔│_│▔│_│▔│_│▔│_│▔│___│▔│_________│▔│_│▔│_│▔│_│▔│_│▔│_│▔│</pre>
+  <table>
+    <tr><th style="width:150px">步骤</th><th style="width:110px">SE</th><th>动作</th></tr>
+    <tr><td><b>1 Shift In</b></td><td>1</td><td>连打 n 个时钟，把 ATPG 向量从 <code>scan_in</code> 串行移进所有 flop，即 PPI 激励</td></tr>
+    <tr><td><b>2 Capture</b></td><td>0</td><td>打<b>一个</b>时钟，组合逻辑结果（PPO）被捕获回 flop；同时 PI 加激励、PO 观测</td></tr>
+    <tr><td><b>3 Shift Out</b></td><td>1</td><td>再打 n 个时钟，把结果串行移出到 <code>scan_out</code>，与期望值（Golden）比对</td></tr>
+  </table>
+  <div class="note">
+    <b>技巧：</b>下一个向量的 Shift In 与当前向量的 Shift Out 可<b>重叠</b>进行，测试时间约为 <code>向量数 × 链长</code> 而非 2 倍。
+  </div>
+
+  <div class="card">
+    <b>At-Speed 测试（动态故障）</b><br>
+    Stuck-at 只能查"卡死"，查不出"走得慢"（transition / path delay fault），需要在<b>功能频率</b>下打两拍 capture。
+  </div>
+<pre><span class="c">// Launch-On-Capture（LOC，Broadside）</span>
+Shift(慢) → SE=0 → Capture1(慢, launch) → Capture2(快, capture) → Shift(慢)
+                     ↑ 发起跳变              ↑ 必须在功能周期内到达
+
+<span class="c">// Launch-On-Shift（LOS，Skewed Load）</span>
+Shift(慢) ... 最后一拍 shift 用来 launch → SE 快速翻转 → Capture(快)</pre>
+  <div class="card">
+    LOS 覆盖率高、向量少，但要求 <code>scan_enable</code> 能在功能频率下切换，对 SE 时序要求极高（常需为 SE 单独做类似时钟树的平衡）。
+  </div>
+  <div class="card">
+    <b>OCC（On-Chip Clock Controller）</b>：at-speed 的快时钟由片上 PLL 提供，OCC 精确挑出需要的若干个快时钟脉冲。
+  </div>
+<pre>慢速 shift clock ──┐
+                   OCC ──▶ 到 scan flop
+PLL 快时钟 ────────┘
+       ▲
+   TAP 配置脉冲数量</pre>
+
+  <h3 class="sec" id="s84"><span class="no">8.4</span>故障模型与 ATPG</h3>
+  <table>
+    <tr><th style="width:190px">故障模型</th><th>描述</th><th style="width:220px">用途</th></tr>
+    <tr><td><b>Stuck-at（SA0/SA1）</b></td><td>节点永久为 0 或 1</td><td>基础，覆盖率通常要求 &gt;99%</td></tr>
+    <tr><td><b>Transition（TDF）</b></td><td>跳变太慢（slow-to-rise / slow-to-fall）</td><td>at-speed，查延迟缺陷</td></tr>
+    <tr><td>Path Delay</td><td>指定关键路径总延迟超标</td><td>针对关键路径</td></tr>
+    <tr><td>Bridging</td><td>两条线短路</td><td>先进工艺重要</td></tr>
+    <tr><td>IDDQ</td><td>静态电流异常</td><td>查漏电缺陷</td></tr>
+    <tr><td>Cell-aware</td><td>基于单元内部晶体管级缺陷</td><td>7nm 以下必备</td></tr>
+  </table>
+
+  <div class="card">
+    <b>ATPG 原理</b>（Automatic Test Pattern Generation，核心算法 D 算法 / PODEM / FAN）
+    <ul class="pt">
+      <li><b>故障激活（Activation）</b>：在故障点制造与故障值相反的值（测 SA0 就让它为 1）</li>
+      <li><b>故障传播（Propagation）</b>：沿敏化路径把差异（D 值）推到某个 PO 或 PPO</li>
+      <li><b>回溯赋值（Justification）</b>：反推需要哪些 PI / PPI 的值才能满足上述条件</li>
+      <li><b>故障仿真（Fault Simulation）</b>：计算该向量顺带检出了哪些其他故障，做<b>故障塌缩</b>与向量压缩</li>
+    </ul>
+  </div>
+<pre>Test Coverage  = 已检测故障数 / (总故障数 - 不可测故障数)
+Fault Coverage = 已检测故障数 / 总故障数</pre>
+  <div class="card">
+    常见 <b>ATPG untestable</b> 原因：冗余逻辑、常量绑定、不受控的时钟 / 复位、黑盒周边、组合环路。
+  </div>
+
+  <h3 class="sec" id="s85"><span class="no">8.5</span>Scan Compression（测试压缩）</h3>
+  <div class="card">
+    <b>为什么要压缩：</b>假设 100 万 flop、10 条链 → 每条链 10 万位；10000 个向量 → 测试数据量和 ATE 占用时间都爆炸。
+  </div>
+<pre> 少量外部                        大量内部短链
+ scan 通道                     ┌──▶ chain 1  ──┐
+   (如 10)                     ├──▶ chain 2  ──┤     (如 2000 条)
+      │       ┌────────────┐   ├──▶ chain 3  ──┤   ┌──────────────┐
+      └──────▶│Decompressor│──┤      ...      ├──▶│   Compactor  │──▶ 10 bit out
+              │  (LFSR /   │   └──▶ chain N ──┘   │ (XOR tree /  │
+              │  spreader) │                      │    MISR)     │
+              └────────────┘                      └──────────────┘</pre>
+  <div class="card">
+    <ul class="pt">
+      <li><b>Decompressor</b>：利用 ATPG 向量中大量 <b>don't care（X）</b> 的特性，用少量输入位展开出大量内部链的激励</li>
+      <li><b>Compactor</b>：XOR 树把大量链输出压成少量位</li>
+    </ul>
+    <b>代价 / 难点：</b>
+    <ul class="pt">
+      <li><b>X-blocking / X-bounding</b>：未知值 X 经过 XOR 压缩器会污染整个输出，必须屏蔽（黑盒输出、未初始化 RAM、异步路径）</li>
+      <li><b>Masking 逻辑</b>：用于屏蔽特定链以定位失效</li>
+      <li>压缩比典型 50×~400×</li>
+    </ul>
+    <div class="kv"><b>工具：</b>Synopsys DFTMAX / DFTMAX Ultra、Mentor TestKompress、Cadence Modus</div>
+  </div>
+  <div class="card">
+    <b>LBIST（Logic BIST）</b>：片上自带 LFSR 生成伪随机向量 + MISR 压缩响应，不依赖 ATE。
+    <ul class="pt">
+      <li>优点：可做在线 / 上电自测，车规 ISO 26262 常要求</li>
+      <li>缺点：伪随机向量覆盖率低，需插入 <b>Test Point</b> 提升；X 必须彻底清除</li>
+    </ul>
+  </div>
+
+  <h3 class="sec" id="s86"><span class="no">8.6</span>完整 Scan 实现流程</h3>
+
+  <div class="card"><b>① RTL 阶段：DFT-Ready 设计</b></div>
+<pre><span class="c">// ① 时钟必须在测试模式可控（不能用内部分频/门控的不可控时钟）</span>
+<span class="k">assign</span> clk_int   = scan_mode ? scan_clk   : div_clk;
+
+<span class="c">// ② 异步复位必须在 shift 期间可控（否则 shift 中被误复位）</span>
+<span class="k">assign</span> rst_n_int = scan_mode ? scan_rst_n : func_rst_n;
+
+<span class="c">// ③ 时钟门控单元测试时强制打开</span>
+<span class="k">assign</span> icg_en    = test_en | func_en;
+
+<span class="c">// ④ 避免生成 latch、组合环（会成为不可测点）</span>
+<span class="c">// ⑤ 避免内部生成的时钟驱动 flop（derived clock）</span></pre>
+  <div class="card"><div class="kv"><b>检查工具：</b>DFT Compiler <code>dft_drc</code>、Tessent DFTAdvisor 的 testability analysis</div></div>
+
+  <div class="card"><b>② 综合阶段：Scan Insertion</b></div>
+<pre><span class="c"># ---------- 1. Test-ready synthesis ----------</span>
+<span class="k">set_scan_configuration</span> -style multiplexed_flip_flop \
+                       -chain_count 8 \
+                       -clock_mixing no_mix
+<span class="k">compile_ultra</span> -scan              <span class="c">;# 直接综合成 scan flop（不缝合）</span>
+
+<span class="c"># ---------- 2. 定义 DFT 信号 ----------</span>
+<span class="k">set_dft_signal</span> -view existing_dff -type ScanClock -port clk  -timing {45 55}
+<span class="k">set_dft_signal</span> -view existing_dff -type Reset     -port rst_n -active_state 0
+<span class="k">set_dft_signal</span> -view spec -type ScanEnable  -port scan_en -active_state 1
+<span class="k">set_dft_signal</span> -view spec -type ScanDataIn  -port si[7:0]
+<span class="k">set_dft_signal</span> -view spec -type ScanDataOut -port so[7:0]
+<span class="k">set_dft_signal</span> -view spec -type TestMode    -port test_mode -active_state 1
+
+<span class="c"># ---------- 3. DFT 规则检查 ----------</span>
+<span class="k">create_test_protocol</span>
+<span class="k">dft_drc</span>                          <span class="c">;# 必须先过 DRC！</span>
+
+<span class="c"># ---------- 4. 插入并缝合 ----------</span>
+<span class="k">preview_dft</span> -show all            <span class="c">;# 预览链结构</span>
+<span class="k">insert_dft</span>
+
+<span class="c"># ---------- 5. 插入后再检查 ----------</span>
+<span class="k">dft_drc</span> -verbose
+<span class="k">report_scan_path</span> -view existing_dff -chain all
+<span class="k">write</span> -format verilog -output netlist_scan.v
+<span class="k">write_test_protocol</span> -output top.spf   <span class="c">;# STIL Protocol File</span></pre>
+  <div class="card">
+    <b>链划分（Chain Partition）原则：</b>
+    <ul class="pt">
+      <li>不同时钟域<b>不混链</b>（<code>-clock_mixing no_mix</code>），否则 shift 时存在域间时序问题</li>
+      <li>边沿不同的 flop（上升 / 下降沿）要分开或正确排序</li>
+      <li>链长尽量均衡（最长链决定测试时间）</li>
+      <li>多电压域、多 power domain 分开处理</li>
+    </ul>
+  </div>
+
+  <div class="card"><b>③ DFT 规则检查常见违例</b></div>
+  <table>
+    <tr><th style="width:280px">违例</th><th style="width:230px">原因</th><th>修法</th></tr>
+    <tr><td>D1 / Uncontrollable clock</td><td>时钟来自内部逻辑</td><td>加 test clock mux</td></tr>
+    <tr><td>D5 / Uncontrollable async set/reset</td><td>异步复位不可控</td><td>加 reset bypass mux</td></tr>
+    <tr><td>D9 / Clock used as data</td><td>时钟进了数据端口</td><td>改 RTL</td></tr>
+    <tr><td>D6 / Latch</td><td>存在透明锁存器</td><td>测试时 force 透明或改 RTL</td></tr>
+    <tr><td>Combinational loop</td><td>组合环</td><td>测试时打断</td></tr>
+  </table>
+
+  <div class="card">
+    <b>④ PR 阶段：Scan Reorder</b><br>
+    综合时的链序是逻辑序，物理上可能"满天飞线"。PR 工具按实际摆放位置重排。
+  </div>
+<pre><span class="c"># Innovus</span>
+<span class="k">set_db</span> dft_scan_def_file top.scandef      <span class="c">;# 由综合工具导出</span>
+<span class="k">place_opt_design</span>
+<span class="c"># 布局后按位置重排链内顺序（链内成员不变、不跨链）</span></pre>
+  <div class="card">
+    <b>SCANDEF</b> 定义了哪些 flop 属于哪条链、哪些段可重排（<code>ORDERED</code> / <code>FLOATING</code>）。Reorder 可显著减少线长与 congestion。
+  </div>
+  <div class="note">
+    Reorder 后网表的链序变了，必须把新网表交给 ATPG 重新生成向量，或让 ATPG 自动识别。
+  </div>
+
+  <div class="card"><b>⑤ ATPG 阶段</b></div>
+<pre><span class="c"># TestMAX / TetraMAX 示例</span>
+<span class="k">read_netlist</span>   netlist_scan_pr.v
+<span class="k">read_netlist</span>   /lib/*.v              <span class="c">;# 库模型</span>
+<span class="k">run_build_model</span> TOP
+
+<span class="c"># DRC（基于 SPF 协议文件）</span>
+<span class="k">set_drc</span>  top.spf
+<span class="k">run_drc</span>
+
+<span class="c"># 故障模型与设置</span>
+<span class="k">add_faults</span> -all
+<span class="k">set_faults</span> -model stuck
+<span class="k">set_atpg</span>   -merge high -capture_cycles 4
+
+<span class="k">run_atpg</span> -auto_compression
+
+<span class="k">report_summaries</span>
+<span class="k">write_patterns</span> pattern.stil -format stil -serial              <span class="c">;# 给 ATE</span>
+<span class="k">write_patterns</span> pattern_par.v -format verilog_single_file      <span class="c">;# 给仿真</span></pre>
+
+  <div class="card">
+    <b>⑥ Pattern 验证（Gate-level Simulation）</b><br>
+    生成的向量必须在门级仿真中跑通，<b>零失配</b>才能交付。
+  </div>
+<pre><span class="c">// 零延迟仿真（验证逻辑正确性）</span>
+<span class="c">// + 带 SDF 反标的时序仿真（验证 at-speed 向量时序是否满足）</span>
+<span class="k">initial</span> $sdf_annotate(<span class="s">"top.sdf"</span>, top_inst, , , <span class="s">"MAXIMUM"</span>);</pre>
+  <div class="card">
+    常见 mismatch 原因：库模型与 ATPG 模型不一致、X 处理差异、总线竞争、时序违例。
+  </div>
+
+  <div class="card"><b>⑦ 交付与量产测试</b></div>
+<pre>pattern.stil / WGL ──▶ ATE 程序（Advantest / Teradyne）
+                   ──▶ CP（Wafer Sort）
+                   ──▶ FT（Final Test）
+                        ↓
+                   失效芯片 → Diagnosis（失效诊断）
+                        ↓
+                   定位到具体 net / cell → 反馈给 Fab 改良工艺</pre>
+
+  <h3 class="sec" id="s87"><span class="no">8.7</span>流程总览图</h3>
+<pre>RTL (DFT hooks: clk mux, rst bypass, ICG test_en)
+   │
+   ├─ MBIST / JTAG / BISR 插入（RTL 层）
+   ▼
+Synthesis  ── compile_ultra -scan ──▶ test-ready netlist
+   │
+   ├─ create_test_protocol → dft_drc  (必须干净)
+   ├─ insert_dft：scan 替换 + stitching + compression
+   ├─ 输出：netlist_scan.v / top.spf / top.scandef
+   ▼
+P&amp;R  ── 读 SCANDEF → place → scan reorder → CTS → route
+   │     输出：post-route netlist / SDF / SPEF
+   ▼
+ATPG ── build model → run_drc → add_faults → run_atpg
+   │     输出：pattern (STIL/WGL)、覆盖率报告
+   ▼
+Gate-level Simulation（零延迟 + SDF 反标）── 零 mismatch
+   ▼
+ATE 量产测试（CP / FT）→ 失效诊断</pre>
+
+  <h3 class="sec" id="s88"><span class="no">8.8</span>关键要点速查</h3>
+  <table>
+    <tr><th style="width:170px">主题</th><th>要点</th></tr>
+    <tr><td>核心思想</td><td>用移位寄存器把时序测试转化为组合测试</td></tr>
+    <tr><td>必备条件</td><td>时钟可控、异步复位可控、无不可测结构</td></tr>
+    <tr><td>测试时间</td><td>≈ 向量数 × 最长链长度 ÷ shift 频率</td></tr>
+    <tr><td>覆盖率目标</td><td>Stuck-at &gt; 99%，Transition &gt; 90%（视工艺）</td></tr>
+    <tr><td>面积开销</td><td>一般 1%~5%（含压缩逻辑）</td></tr>
+    <tr><td>最大风险</td><td>DRC 不干净 → 覆盖率上不去；X 污染 → 压缩失效</td></tr>
+    <tr><td>与 PR 的交互</td><td>SCANDEF 驱动 reorder；reorder 后需重跑 ATPG</td></tr>
+  </table>
+
+  <h3 class="sec" id="s89"><span class="no">8.9</span>Scan 时钟与功能时钟是否相同</h3>
+  <table>
+    <tr><th style="width:230px">维度</th><th>是否相同</th></tr>
+    <tr><td>物理路径 / 时钟树</td><td><span class="ok">✓ 同一棵时钟树</span>（CTS 只建一次，scan 复用）</td></tr>
+    <tr><td>时钟源（根）</td><td><span class="no">✗</span> 通常不同，测试时从外部 pin 或 OCC 引入</td></tr>
+    <tr><td>频率</td><td><span class="no">✗</span> Shift 慢（10~50MHz），Capture 按模式分</td></tr>
+    <tr><td>分组 / 域划分</td><td><span class="no">✗</span> 测试时可能合并或独立控制</td></tr>
+  </table>
+  <div class="note">
+    <b>关键点：</b>Scan 用的是<b>同一条物理时钟路径</b>（必须如此，否则测不到真实时钟树上的缺陷），但<b>时钟源和频率不同</b>。
+  </div>
+
+  <div class="card">
+    <b>① 时钟源为什么要换</b><br>
+    功能时钟常来自 PLL、内部分频器、时钟门控，这些在测试时<b>不可控</b>（PLL 需锁定时间、分频器状态未知），所以要加 test clock mux。
+  </div>
+<pre><span class="c">// 典型做法：测试模式从外部 pin 直接灌时钟</span>
+<span class="k">assign</span> clk_core = test_mode ? scan_clk_pin : pll_div_clk;</pre>
+  <div class="card">
+    对应 DFT DRC 规则 <b>D1（Uncontrollable clock）</b>——不加这个 mux 就会报违例，覆盖率上不去。
+  </div>
+  <table>
+    <tr><th style="width:240px">模式</th><th style="width:300px">时钟来源</th><th>频率</th></tr>
+    <tr><td>Shift</td><td>外部 ATE pin</td><td>低速，10~50MHz</td></tr>
+    <tr><td>Slow-speed Capture</td><td>外部 ATE pin</td><td>低速</td></tr>
+    <tr><td><b>At-speed Capture</b></td><td><b>片上 PLL（经 OCC 挑脉冲）</b></td><td>功能频率</td></tr>
+  </table>
+
+  <div class="card"><b>② 频率为什么不同 —— Shift 必须慢</b></div>
+<pre>① ATE 通道驱动能力 / 精度有限，高速 shift 成本极高
+② Shift 时所有 flop 同时翻转 → 瞬时功耗（IR-Drop）远超功能模式
+③ 跨时钟域混链时，shift 路径的 skew 难以保证
+④ Shift 路径是 Q→SI，通常无逻辑，慢速完全够用</pre>
+
+  <div class="card"><b>Capture 分两种</b></div>
+<pre><span class="c">// Slow-speed Capture（Stuck-at）—— 慢速即可，只查"卡死"</span>
+Shift(10MHz) → SE=0 → Capture(10MHz) → Shift(10MHz)
+
+<span class="c">// At-speed Capture（Transition / Path Delay）</span>
+Shift(10MHz) ... → launch ─┐
+                           ├─ 这两拍间隔 = 功能周期（如 1GHz → 1ns）
+                   capture ─┘
+→ 继续 Shift(10MHz)</pre>
+
+  <div class="card">
+    <b>③ OCC（On-Chip Clock Controller）</b><br>
+    at-speed 的快时钟不可能从 ATE 给，必须用片上 PLL。
+  </div>
+<pre>                    ┌─────────────────────┐
+ ATE slow clk ─────▶│                     │
+                    │       OCC           │──▶ 时钟树 ──▶ scan flops
+ PLL fast clk ─────▶│  (clock chopper)    │
+                    │                     │
+ scan_en ──────────▶│ 按配置挑 N 个快脉冲  │
+ TAP config ───────▶│                     │
+                    └─────────────────────┘</pre>
+  <div class="card">
+    OCC 内部逻辑：shift 期间透传 ATE 慢时钟；capture 期间切到 PLL，精确放出 2~4 个快脉冲，然后再切回慢时钟。
+  </div>
+
+  <div class="card"><b>④ 时钟树是共用的（重要）</b></div>
+<pre>            ┌─── CTS 建的同一棵时钟树 ───┐
+clk_mux ───▶│  buf → buf → buf → flops   │
+   ▲        └───────────────────────────┘
+   ├── PLL clk （功能模式）
+   └── ATE clk （测试模式）</pre>
+  <div class="card">
+    <b>为什么必须共用：</b>
+    <ul class="pt">
+      <li>时钟树上的 buffer / inverter 本身也会有缺陷，必须被测到</li>
+      <li>若 scan 走独立时钟树，功能时钟树上的故障就逃逸了</li>
+      <li>面积 / 功耗上也不可能建两棵树</li>
+    </ul>
+  </div>
+  <div class="card"><b>SDC 约束写法：</b>scan 时钟作为独立 mode 在 MMMC 中分析</div>
+<pre><span class="c"># --- functional mode ---</span>
+<span class="k">create_clock</span> -name func_clk -period 1.0   [get_pins pll/CLKOUT]
+
+<span class="c"># --- scan shift mode ---</span>
+<span class="k">create_clock</span> -name scan_clk -period 100.0 [get_ports scan_clk_pin]
+<span class="k">set_case_analysis</span> 1 [get_ports test_mode]
+<span class="k">set_case_analysis</span> 1 [get_ports scan_en]     <span class="c">;# shift 模式下 SE=1</span>
+
+<span class="c"># --- scan capture mode（at-speed）---</span>
+<span class="k">create_clock</span> -name scan_cap -period 1.0   [get_ports scan_clk_pin]
+<span class="k">set_case_analysis</span> 0 [get_ports scan_en]</pre>
+  <div class="card">
+    这三个（甚至更多）mode 都要在 <b>MMMC</b> 中做 STA 签核：shift 模式一般只看 hold，capture 模式要看 setup + hold。
+  </div>
+
+  <div class="card"><b>⑤ 多时钟域在 Scan 下怎么处理</b>（功能上有 CLK_A / CLK_B / CLK_C 三个域）</div>
+<pre><span class="c"># 不混链（主流）</span>
+chain 1,2,3  ← 全部是 CLK_A 域的 flop
+chain 4,5    ← 全部是 CLK_B 域的 flop
+chain 6      ← 全部是 CLK_C 域的 flop
+
+<span class="k">set_scan_configuration</span> -clock_mixing no_mix   <span class="c"># 链长会不均衡，但安全</span></pre>
+  <div class="card">
+    <b>Shift 时</b>各链独立、互不影响，CLK_A/B/C 可以<b>并行</b>打，测试时间不叠加。<br><br>
+    <b>Capture 时的问题：</b>CLK_A 域 flop 输出经组合逻辑到 CLK_B 域 flop，capture 时两个时钟同时打，域间路径时序无法保证 → 可能误报。
+  </div>
+  <table>
+    <tr><th style="width:240px">解决方案</th><th>说明</th></tr>
+    <tr><td><b>One-hot capture</b></td><td>每个 pattern 只打一个时钟域，域间故障放弃</td></tr>
+    <tr><td><b>Staggered capture</b></td><td>各域时钟错开（skew 足够大），域间路径按 shift 慢速算</td></tr>
+    <tr><td>跨域路径 masking</td><td>把域间接收 flop 设为 X / 不观测</td></tr>
+    <tr><td>Simultaneous capture</td><td>要求 STA 保证域间时序，覆盖率最高但风险大</td></tr>
+  </table>
+  <div class="note">
+    真正的异步跨时钟域（CDC）路径，ATPG 必须 <b>mask</b> 掉，否则会有随机 mismatch。
+  </div>
+
+  <div class="card"><b>⑥ Scan 时钟相关的常见坑</b></div>
+  <table>
+    <tr><th style="width:230px">坑</th><th style="width:280px">现象</th><th>对策</th></tr>
+    <tr><td>时钟门控（ICG）没打开</td><td>下游 flop 全测不到，覆盖率骤降</td><td>ICG 的 <code>EN</code> 或上 <code>test_en</code></td></tr>
+    <tr><td>分频时钟驱动 flop</td><td>D1 违例，这些 flop 不进链</td><td>加 test clock mux 或用 OCC</td></tr>
+    <tr><td>Shift 时 skew 过大</td><td>相邻 flop 串数据错位（shift 链 hold 违例）</td><td>shift 模式单独做 hold fix</td></tr>
+    <tr><td>异步复位没 bypass</td><td>Shift 中间被复位清掉</td><td>加 reset bypass mux（D5）</td></tr>
+    <tr><td>OCC 脉冲数配错</td><td>at-speed pattern 全 fail</td><td>核对 TAP 配置与 ATPG 设置一致</td></tr>
+    <tr><td>Shift 功耗过大</td><td>IR-Drop 导致误 fail</td><td>降低 shift 频率、低功耗 ATPG（减少翻转）</td></tr>
+    <tr><td>负沿 flop 混进正沿链</td><td>shift 数据乱</td><td>分链或在链中正确排序（正沿在前）</td></tr>
+  </table>
+
+  <div class="note">
+    <b>一句话总结：</b>Scan 与功能逻辑共用<b>同一棵时钟树</b>（物理路径相同），但测试时时钟源切到 ATE pin 或 OCC，shift 用低速、at-speed capture 用 PLL 全速——即<b>路径相同，源和频率不同</b>。
+  </div>
+
+  <h3 class="sec" id="s810"><span class="no">8.10</span>Scan 有几种测试模式</h3>
+  <div class="card">
+    "测试模式"在 Scan 语境下有<b>三个不同维度</b>，容易混淆，需分开理解。
+  </div>
+
+  <h4 style="margin:26px 0 8px;font-size:16px;">维度一：电路工作模式（由控制信号决定）</h4>
+  <table>
+    <tr><th style="width:150px">模式</th><th style="width:100px">test_mode</th><th style="width:90px">scan_en</th><th style="width:170px">时钟</th><th>行为</th></tr>
+    <tr><td><b>Functional</b>（功能）</td><td>0</td><td>0</td><td>PLL 功能时钟</td><td>正常工作，scan 逻辑完全旁路</td></tr>
+    <tr><td><b>Shift</b>（移位）</td><td>1</td><td>1</td><td>ATE 慢时钟</td><td>flop 串成移位寄存器，载入 / 移出数据</td></tr>
+    <tr><td><b>Capture</b>（捕获）</td><td>1</td><td>0</td><td>ATE 慢 或 PLL 快</td><td>组合逻辑结果被采样回 flop</td></tr>
+  </table>
+<pre>     test_mode=1
+         │
+         ├─ scan_en=1 ──▶ Shift   （D 端选 SI）
+         └─ scan_en=0 ──▶ Capture （D 端选功能逻辑）</pre>
+  <div class="note">
+    <b>Capture</b> 与 <b>Functional</b> 虽然都是 <code>scan_en=0</code>、都走功能逻辑，但 Capture 下时钟源仍是测试时钟、只打固定几拍；Functional 是连续运行。
+  </div>
+
+  <h4 style="margin:26px 0 8px;font-size:16px;">维度二：测试类型 / Pattern 种类（最常说的"测试模式"）</h4>
+
+  <div class="card">
+    <b>① Chain Test（链完整性测试）</b> —— 最先跑，也最重要
+  </div>
+<pre>向 scan_in 灌入 0011 重复序列 → 全程 SE=1，不做 capture
+                              → 从 scan_out 比对移出的数据</pre>
+  <div class="card">
+    <ul class="pt">
+      <li><b>目的</b>：验证 scan 链本身是通的（没断、没短路、SE / CLK 接对了）</li>
+      <li><b>特点</b>：<b>不经过任何组合逻辑</b>，只测链上的 flop 和链连线</li>
+      <li><b>意义</b>：链不通 → 后面所有 pattern 全废；量产中 chain test fail 直接判死</li>
+      <li>典型激励 <code>0011 0011...</code>（可同时检测 stuck-at 0/1 与相邻短路）</li>
+      <li>也叫 <b>Flush Test</b>（灌 0000 或 1111，检查能否透传）</li>
+    </ul>
+  </div>
+
+  <div class="card"><b>② Stuck-at Test（静态故障）</b></div>
+  <table>
+    <tr><th style="width:150px">项</th><th>内容</th></tr>
+    <tr><td>故障模型</td><td>SA0 / SA1，节点永久卡在 0 或 1</td></tr>
+    <tr><td>时序</td><td>Shift 慢 → <b>1 拍</b> capture（慢速）→ Shift 慢</td></tr>
+    <tr><td>查什么</td><td>开路、短路、晶体管完全失效</td></tr>
+    <tr><td>覆盖率目标</td><td>&gt; 99%</td></tr>
+    <tr><td>向量量</td><td>相对少</td></tr>
+  </table>
+<pre>Shift In(n) → SE=0 → Capture ×1 → SE=1 → Shift Out(n)
+                      ↑ 慢速时钟即可</pre>
+
+  <div class="card"><b>③ Transition Delay Test（TDF，跳变延迟）</b></div>
+  <table>
+    <tr><th style="width:150px">项</th><th>内容</th></tr>
+    <tr><td>故障模型</td><td>slow-to-rise / slow-to-fall，跳变太慢</td></tr>
+    <tr><td>时序</td><td><b>2 拍 at-speed capture</b>（launch + capture）</td></tr>
+    <tr><td>查什么</td><td>制造偏差导致的速度不足、电阻型缺陷</td></tr>
+    <tr><td>覆盖率目标</td><td>85%~95%</td></tr>
+    <tr><td>向量量</td><td>约为 stuck-at 的 2~4 倍</td></tr>
+  </table>
+<pre><span class="c">// ① LOC (Launch-On-Capture / Broadside)</span>
+Shift(慢) → SE=0 → launch拍(慢) → capture拍(快) → Shift(慢)
+                    ↑ 用功能逻辑产生跳变
+优点：对 SE 时序无要求
+缺点：launch 的值受组合逻辑约束，覆盖率偏低、向量多
+
+<span class="c">// ② LOS (Launch-On-Shift / Skewed Load)</span>
+Shift(慢)... → 最后一拍shift当launch → SE快速翻转 → capture拍(快)
+                                         ↑ 这里最难
+优点：launch 值完全可控，覆盖率高、向量少
+缺点：SE 必须在功能频率下切换 → SE 要做类时钟树的平衡</pre>
+
+  <div class="card"><b>④ Path Delay Test（路径延迟）</b></div>
+  <table>
+    <tr><th style="width:150px">项</th><th>内容</th></tr>
+    <tr><td>故障模型</td><td>指定的某条完整路径总延迟超标</td></tr>
+    <tr><td>输入</td><td>需从 STA 导出关键路径列表（如 top 1000 条）</td></tr>
+    <tr><td>特点</td><td>针对性强，向量少，但需手工指定路径</td></tr>
+    <tr><td>用途</td><td>高频设计验证关键路径是否真的够快</td></tr>
+  </table>
+
+  <div class="card"><b>⑤ IDDQ Test</b></div>
+<pre>把芯片置于静态（时钟停止）→ 测静态电源电流
+正常：漏电流极小
+异常：电流偏大 → 存在桥接 / 漏电缺陷</pre>
+  <div class="card">
+    不需要 capture，只需 shift 进一个状态然后停钟测电流。先进工艺下漏电本来就大，IDDQ 区分度下降，用得少了。
+  </div>
+
+  <div class="card"><b>⑥ Bridging / Cell-aware Test</b>（在 stuck-at + TDF 之上的补充 pattern，提升 DPPM）</div>
+  <table>
+    <tr><th style="width:190px">模型</th><th>说明</th></tr>
+    <tr><td><b>Bridging</b></td><td>两条相邻线短路（需要布线后的物理邻接信息）</td></tr>
+    <tr><td><b>Cell-aware</b></td><td>基于标准单元内部晶体管级缺陷库（厂商提供），7nm 以下必备</td></tr>
+    <tr><td>Gate-exhaustive</td><td>对每个门穷举所有输入组合</td></tr>
+  </table>
+
+  <h4 style="margin:26px 0 8px;font-size:16px;">维度三：测试访问架构模式（由 TAP / 配置寄存器切换）</h4>
+
+  <div class="card"><b>① Bypass / Serial Mode（直通模式）</b></div>
+<pre>ATE pin ──────────────▶ 少量长链 ──────────────▶ ATE pin
+         （不经过 decompressor / compactor）</pre>
+  <div class="card">
+    <b>用途</b>：chain test、失效诊断（Diagnosis）、压缩逻辑本身出问题时的 debug<br>
+    <b>特点</b>：链很长、测试时间长，但结果<b>一对一可追溯</b>
+  </div>
+
+  <div class="card"><b>② Compression Mode（压缩模式，量产主用）</b></div>
+<pre>10 pin ──▶ Decompressor ──▶ 2000 条短链 ──▶ Compactor ──▶ 10 pin</pre>
+  <div class="card">
+    <b>用途</b>：量产测试，测试时间缩短 50×~400×<br>
+    <b>特点</b>：输出是 XOR 混合的，单个 pattern fail 难以直接定位
+  </div>
+
+  <div class="card"><b>③ LBIST Mode（逻辑自测）</b></div>
+<pre>片上 LFSR ──▶ scan 链 ──▶ MISR ──▶ 最终 signature 与期望值比对</pre>
+  <div class="card">
+    <b>用途</b>：上电自测、在线周期自测（车规 ISO 26262 / 功能安全要求）<br>
+    <b>特点</b>：不依赖 ATE，但覆盖率低（需插 Test Point）、X 必须彻底清零
+  </div>
+
+  <div class="card"><b>④ Hierarchical / Core-based Mode</b></div>
+<pre>大 SoC 分 core，每个 core 独立 wrap（IEEE 1500 / 1687）
+→ 可以单独测某个 core（INTEST）
+→ 或测 core 之间的互连（EXTEST）</pre>
+
+  <h4 style="margin:26px 0 8px;font-size:16px;">完整的量产测试流程（模式串联）</h4>
+<pre>① Chain Test              ← 必须先过，链不通就 stop
+② Stuck-at (压缩模式)      ← 主力，覆盖率最高
+③ Transition LOC/LOS      ← at-speed，查速度缺陷
+④ Path Delay              ← 关键路径补充
+⑤ MBIST                   ← 存储器（独立于 scan）
+⑥ IDDQ                    ← 可选
+⑦ Bridging/Cell-aware     ← 先进工艺补充
+   ─────────────────────
+   失效片 → 切 Bypass 模式 → Diagnosis 定位</pre>
+
+  <h4 style="margin:26px 0 8px;font-size:16px;">核心区别一览表</h4>
+  <table>
+    <tr><th style="width:150px">测试模式</th><th style="width:120px">Capture 拍数</th><th style="width:150px">时钟速度</th><th style="width:140px">过组合逻辑</th><th>主要查</th></tr>
+    <tr><td><b>Chain Test</b></td><td>0</td><td>慢</td><td><span class="no">✗ 不过</span></td><td>链本身</td></tr>
+    <tr><td><b>Stuck-at</b></td><td>1</td><td>慢</td><td><span class="ok">✓</span></td><td>卡死型缺陷</td></tr>
+    <tr><td><b>Transition</b></td><td>2</td><td><b>快</b>（capture 拍）</td><td><span class="ok">✓</span></td><td>速度不足</td></tr>
+    <tr><td><b>Path Delay</b></td><td>2</td><td><b>快</b></td><td><span class="ok">✓</span>（指定路径）</td><td>关键路径延迟</td></tr>
+    <tr><td><b>IDDQ</b></td><td>0</td><td>停钟</td><td>—</td><td>漏电 / 桥接</td></tr>
+    <tr><td><b>LBIST</b></td><td>多</td><td>慢或快</td><td><span class="ok">✓</span></td><td>在线自测</td></tr>
+  </table>
+
+  <div class="note">
+    <b>一句话区分：</b>Chain test 测"链自己"；Stuck-at 测"通不通"；Transition / Path 测"快不快"；IDDQ 测"漏不漏"。前三者都靠 Shift + Capture，区别只在 capture 几拍、拍间多快。
+  </div>
 
 </main>
 </div>
