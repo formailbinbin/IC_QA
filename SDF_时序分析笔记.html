@@ -2505,7 +2505,8 @@ write_sdf -delay_type max top_max.sdf</code></pre>
 
   <div class="box danger">
     <span class="box-t">三层检查，缺一层就可能"以为反标了其实没反标"</span>
-    ① <strong>读进去了吗</strong> —— elaborate 阶段的 log 诊断<br>
+    ① <strong>读进去了吗</strong> —— elaborate 阶段的 log 诊断 +
+       <code>sdfAnnotateInfo</code> 逐条定位<strong>具体哪条没反标上</strong><br>
     ② <strong>三元组是空的吗</strong> —— SDF 文件静态文本检查<br>
     ③ <strong>延迟真的进仿真了吗</strong> —— 运行时波形/违例验证<br>
     前两层只是"看 log"，<strong>只有第三层能真正证明反标生效</strong>。
@@ -2549,6 +2550,213 @@ grep "SDFCOM" vcs.log | sed 's/.*\(SDFCOM_[A-Z]*\).*/\1/' | sort | uniq -c</code
 
 <pre><code># COND 要专门看 —— 它是静默退回库默认值的
 grep -i "cond" sdf_annotate.log | head -50</code></pre>
+
+  <h4><code>sdfAnnotateInfo</code>：唯一能定位到"具体哪一条没反标上"的文件</h4>
+
+  <div class="box key">
+    <span class="box-t">它和 vcs.log 的区别</span>
+    <code>vcs.log</code> 里的 <code>SDFCOM</code> 警告是<strong>被截断、被归并</strong>过的
+    （同类警告只报前几条，之后静默）—— 你看到 3 条警告，真实可能是 3 万条。<br>
+    <code>sdfAnnotateInfo</code> 是 VCS 在反标过程中写出的<strong>逐条明细</strong>：
+    每一条失败都带<strong>完整层次实例名 + 端口名 + 失败原因</strong>。<br>
+    <strong>→ 要回答"到底哪里没反标上"，只能看这个文件，不能看 vcs.log。</strong>
+  </div>
+
+  <h5>① 这个文件从哪里来</h5>
+
+  <div class="box danger">
+    <span class="box-t">它由 vcs 编译阶段的诊断选项触发，不是 $sdf_annotate 的参数</span>
+    <strong>触发条件</strong>：在 <strong>vcs 编译阶段</strong>加上
+    <code>-diag=sdf:verbose</code>。<br>
+    <strong>生成位置</strong>：VCS 在<strong>当前目录</strong>下生成名为
+    <code>sdfAnnotateInfo</code> 的文件（固定文件名，不可改）。<br>
+    <strong>版本要求</strong>：完整打印<strong>反标率</strong>通常需要
+    <strong>VCS 2018 及以上</strong>；旧版本可能只记录成功数量，不直接给比率，
+    需要自己和 SDF 的 CELL 数对账。
+  </div>
+
+<pre><code># 编译阶段：-sdf 指定反标，-diag=sdf:verbose 要求输出反标明细
+vcs -full64 -sverilog \
+    -sdf max:tb.dut:top_max.sdf \
+    +maxdelays \
+    -diag=sdf:verbose \
+    -v /pdk/slow_lib.v \
+    tb.sv netlist.v -o simv 2>&1 | tee comp.log
+
+# 之后当前目录下出现 sdfAnnotateInfo
+ls -l sdfAnnotateInfo</code></pre>
+
+  <div class="box warn">
+    <span class="box-t">三个容易搞混的东西，作用完全不同</span>
+    <table>
+      <thead><tr><th style="width:230px">选项 / 参数</th><th style="width:110px">生效阶段</th><th>作用</th></tr></thead>
+      <tbody>
+        <tr><td><code>-diag=sdf:verbose</code></td><td><strong>vcs 编译</strong></td>
+            <td><strong>生成 <code>sdfAnnotateInfo</code></strong>，含逐条明细与反标统计 ★</td></tr>
+        <tr><td><code>+sdfverbose</code></td><td>vcs 编译</td>
+            <td>解除 <code>SDFCOM</code> 警告的条数截断，警告仍打到 <strong>log</strong>，
+                <strong>不产生这个文件</strong></td></tr>
+        <tr><td><code>$sdf_annotate</code> 第 4 参数</td><td>运行时</td>
+            <td>指定<strong>自己的</strong> log 文件名（内容是 annotate 过程的告警），
+                与 <code>sdfAnnotateInfo</code> 是<strong>两份不同的文件</strong></td></tr>
+      </tbody>
+    </table>
+    结论：只加 <code>+sdfverbose</code> 然后去找 <code>sdfAnnotateInfo</code>，会找不到文件。
+  </div>
+
+  <div class="box note">
+    <span class="box-t">还有两个常用写法</span>
+    <code>-diag=sdf</code>：精简模式，只给汇总统计，不列逐条明细 —— 适合做回归门禁的快速检查。<br>
+    <code>-diag=sdf:verbose,timescale</code>：多个子项用逗号连接，可同时查单位问题。<br>
+    具体支持哪些子项<strong>随版本不同</strong>，用 <code>vcs -diag=help</code> 确认本版本的实际列表。
+  </div>
+
+  <div class="box danger">
+    <span class="box-t">两个必须先确认的前提，否则后面全是白分析</span>
+    ① <strong>文件时间戳</strong>：<code>ls -l --time-style=full-iso sdfAnnotateInfo</code><br>
+    　 文件名固定、<strong>会被同目录下次编译覆盖</strong>；
+    　 但如果这次<strong>忘了加 <code>-diag=sdf:verbose</code></strong>，旧文件就会原地保留下来。
+    　 分析一份上次的残留文件然后得出"没问题"的结论，是这一步最常见的乌龙。<br>
+    　 <strong>建议编译前先 <code>rm -f sdfAnnotateInfo</code>。</strong><br>
+    ② <strong>文件头部信息</strong>：确认里面记录的 SDF 路径、scope、以及取的是
+    <span class="tag min">min</span>/<span class="tag typ">typ</span>/<span class="tag max">max</span> 哪一列，
+    和你以为的一致。<strong>很多"没反标上"其实是读错了一份 SDF。</strong>
+  </div>
+
+  <h5>② 先看汇总：反标率</h5>
+  <p>VCS 2018+ 会在文件里给出统计，<strong>这是第一个该看的数字</strong>，不要一上来就翻明细。</p>
+<pre><code># 抓汇总段（关键词随版本略有差异，先人眼看一遍文件尾部）
+grep -inE "total|annotated|percent|%|summary|statistic" sdfAnnotateInfo | head -30
+tail -40 sdfAnnotateInfo</code></pre>
+  <div class="box key">
+    <span class="box-t">反标率怎么读</span>
+    <strong>接近 100%</strong>：正常，再去看剩下那几条是不是 spare / tie / filler。<br>
+    <strong>明显偏低（如 60%、30%）</strong>：成片失败，直接进下面的层次聚合找子树。<br>
+    <strong>低到个位数</strong>：几乎一定是 <strong>scope 给错</strong>或网表/SDF 完全不配对。<br>
+    <strong>旧版本没有比率</strong>：拿成功条数手工除以 <code>grep -c "^\s*(CELL" top.sdf</code>，
+    注意扣除 filler/decap 这类本就不在 SDF 里的单元（见 9.12）。
+  </div>
+
+  <h5>③ 第一刀：把失败行全部抽出来，判断是"零散"还是"成片"</h5>
+
+  <div class="box warn">
+    <span class="box-t">不要把脚本写死在某个消息 ID 上</span>
+    <code>SDFCOM_xxx</code> 这类消息 ID 和具体措辞<strong>随 VCS 版本变化</strong>，
+    不同版本 <code>sdfAnnotateInfo</code> 的排版也不完全一样。<br>
+    稳妥做法是<strong>按关键词抓</strong>（<code>fail</code> / <code>not found</code> / <code>unable</code> …），
+    并且第一次用时<strong>先人眼看几十行</strong>，确认本版本的实际格式后再调整下面脚本的字段切分。
+  </div>
+<pre><code># 抓所有失败 / 告警行
+grep -inE "warn|error|fail|not found|cannot|could not|unable|no such|ignor" \
+     sdfAnnotateInfo > ann_fail.txt
+wc -l ann_fail.txt
+
+# 按原因归类，看失败集中在哪一类
+sed -E 's/.*\[([A-Z_0-9]+)\].*/\1/' ann_fail.txt | sort | uniq -c | sort -rn</code></pre>
+
+  <h5>④ 第二刀：抽出失败实例名，按层次聚合 ← 最关键的一步</h5>
+  <p>逐条看失败记录是没有意义的（可能几万条）。<strong>要看的是它们聚成了什么形状。</strong></p>
+<pre><code># 抽出层次实例名（字段格式按你文件实际情况调整）
+grep -oE "tb\.dut[A-Za-z0-9_.\[\]\\\\/]*" ann_fail.txt | sort -u > fail_inst.txt
+wc -l fail_inst.txt
+
+# 按前 3 层层次聚合 —— 看是不是集中在某个模块
+cut -d. -f1-3 fail_inst.txt | sort | uniq -c | sort -rn | head -20
+
+# 再往下钻一层
+cut -d. -f1-4 fail_inst.txt | sort | uniq -c | sort -rn | head -20</code></pre>
+
+  <table>
+    <thead><tr><th style="width:230px">聚合出来的形状</th><th>指向的根因</th></tr></thead>
+    <tbody>
+      <tr><td>集中在<strong>某一个模块子树</strong></td>
+          <td>该模块是后加/后 ECO 的，或网表与 SDF 不是同一次导出；也可能该模块被单独换过实现</td></tr>
+      <tr><td>集中在<strong>某一类 cell</strong>（见下一步）</td>
+          <td><strong>库版本不匹配</strong> —— 库 <code>.v</code> 的 specify 块与 SDF 对不上</td></tr>
+      <tr><td><strong>均匀散布在整个设计</strong></td>
+          <td>全局性问题：scope 给错、<code>DIVIDER</code> 不符、总线/转义命名风格不一致</td></tr>
+      <tr><td>只有几十条，且都是 spare / tie / filler</td>
+          <td>可接受（见 9.12），但要<strong>显式列出来确认</strong>，不能靠猜</td></tr>
+      <tr><td>失败行为 0，但成功条数远小于 SDF 的 CELL 数</td>
+          <td>SDF <strong>解析在中途提前结束</strong>（语法问题 / 文件被截断）→ 比有警告更危险</td></tr>
+    </tbody>
+  </table>
+
+  <h5>⑤ 第三刀：把失败实例名反查成 cell 类型</h5>
+  <p>这一步用来区分"某个模块的问题"和"某类单元的问题"。</p>
+<pre><code># 用失败实例的叶子名回网表查它是什么 cell
+while read inst; do
+    leaf=${inst##*.}
+    grep -m1 -hoE "^[ \t]*[A-Za-z0-9_]+[ \t]+${leaf}[ \t]*\(" netlist.v
+done &lt; fail_inst.txt | awk '{print $1}' | sort | uniq -c | sort -rn | head -20</code></pre>
+
+  <div class="box note">
+    <span class="box-t">结果怎么用</span>
+    如果某一类 cell（比如所有 <code>CKLNQD*</code> ICG、或所有 <code>SDFCNQD*</code> scan FF）<strong>整类全失败</strong>
+    → 几乎一定是<strong>库 <code>.v</code> 版本不对</strong>，而不是网表问题。<br>
+    此时回 <strong>第 9 章</strong>对照该类 cell 在 SDF 中<strong>应有</strong>的 IOPATH / TIMINGCHECK 形态，
+    再去核对库文件里 <code>specify</code> 块是否真有这些路径。
+  </div>
+
+  <h5>⑥ 失败原因 → 根因 → 修法对照表</h5>
+  <table>
+    <thead><tr>
+      <th style="width:250px"><code>sdfAnnotateInfo</code> 里的线索</th>
+      <th style="width:230px">根因</th><th>修法</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>整条层次路径都解析不到</td>
+          <td>scope 层次给错</td>
+          <td>对齐 <code>$sdf_annotate</code> 第 2 参数 / <code>-sdf</code> 的中间字段，
+              必须指向 SDF 的 <code>DESIGN</code> 对应的那一级</td></tr>
+      <tr><td>层次能走到中间几级，<strong>最后一级</strong>实例找不到</td>
+          <td>网表与 SDF 版本不同（该实例被 ECO 改名/删除/插入）</td>
+          <td><strong>必须用同一次 P&amp;R 导出的 netlist + SDF</strong>，不能混用</td></tr>
+      <tr><td>层次分隔符对不上（<code>/</code> vs <code>.</code>）</td>
+          <td>SDF 头的 <code>DIVIDER</code> 声明与实际用的符号不一致</td>
+          <td>检查 <code>(DIVIDER /)</code>；VCS 严格按声明解析，改声明或重新导出</td></tr>
+      <tr><td>实例名里带 <code>\</code> 转义、或 <code>[3]</code> 与 <code>_3_</code> 混用</td>
+          <td>总线位 / 转义标识符命名风格不一致</td>
+          <td>统一导出选项（bus naming style、是否 escape），
+              两边（网表、SDF）必须同一套</td></tr>
+      <tr><td>实例找到了，但 <strong>IOPATH 的端口</strong>找不到</td>
+          <td>库 <code>.v</code> 的 <code>specify</code> 块里没有这条路径</td>
+          <td>换匹配版本的库；确认用的是<strong>带时序的 <code>.v</code></strong>
+              而不是纯功能模型</td></tr>
+      <tr><td><strong>TIMINGCHECK</strong> 找不到</td>
+          <td>库 <code>.v</code> 无对应 <code>$setuphold</code> / <code>$recrem</code></td>
+          <td>同上。<strong>后果最严重：该 FF 完全不做时序检查，仿真永远 PASS</strong></td></tr>
+      <tr><td><code>COND</code> / <code>CONDELSE</code> 条件不匹配</td>
+          <td>SDF 的条件表达式与库 <code>specify</code> 的 <code>if</code> 不逐字对应</td>
+          <td>确认库版本一致；该路径会<strong>静默退回</strong>默认延迟，必须单独 grep 清零</td></tr>
+      <tr><td><code>INTERCONNECT</code> 的 net / port 找不到</td>
+          <td>网表被打平或改名；或 SDF 写的是多源互连</td>
+          <td>加 <code>+multisource_int_delays</code>；确认仿真网表没被额外优化过</td></tr>
+      <tr><td>有反标成功记录，但延迟值全是 0</td>
+          <td>不是匹配问题，是<strong>单位</strong>问题</td>
+          <td>核对 SDF <code>TIMESCALE</code> 与 <code>`timescale</code> 精度，见 10.2</td></tr>
+    </tbody>
+  </table>
+
+  <h5>⑦ 把失败清单变成回归门禁</h5>
+  <p>一次性查清楚没用，要让它在每次跑之前自动拦住。</p>
+<pre><code># 剔除已知可接受的失败（spare / tie / filler，见 9.12）
+grep -viE "spare|tie(hi|lo)|fill|decap|tap" fail_inst.txt > fail_real.txt
+
+# 门禁：真实失败必须为 0
+if [ -s fail_real.txt ]; then
+    echo "SDF annotation FAILED: $(wc -l &lt; fail_real.txt) instances"
+    head -20 fail_real.txt
+    exit 1
+fi</code></pre>
+
+  <div class="box key">
+    <span class="box-t">这一步的价值</span>
+    把"反标是否成功"从<strong>人眼看 log 的主观判断</strong>，变成一个
+    <strong>可以 exit 1 的客观门禁</strong>。<br>
+    同时 <code>fail_real.txt</code> 的<strong>基线数量</strong>本身就是一个有用的指标：
+    下一版网表跑完突然从 0 变成 8000 条，说明这一版有东西变了。
+  </div>
 
   <h4>数量对账（最容易被跳过，但最有效）</h4>
 <pre><code># SDF 里有多少个 CELL
@@ -2693,10 +2901,12 @@ grep -c "^\s*(CELL"   top.sdf
 grep -c "TIMINGCHECK" top.sdf
 
 # ========== 编译 / elaborate ==========
+rm -f sdfAnnotateInfo                          # 先删上次残留，避免看错文件
 vcs -full64 -sverilog \
     -sdf max:tb.dut:top_ss.sdf \
     +maxdelays \
     +sdfverbose \
+    -diag=sdf:verbose \
     +multisource_int_delays \
     +neg_tchk -negdelay \
     -diag timescale \
@@ -2707,6 +2917,19 @@ vcs -full64 -sverilog \
 grep "SDFCOM" comp.log | wc -l                 # 目标：0
 grep -i "cond"  sdf_annotate.log | wc -l       # COND 单独确认
 grep -i "timescale" comp.log                   # 单位一致性
+
+# ========== 定位"具体哪条没反标上"：看 sdfAnnotateInfo ==========
+ls -l --time-style=full-iso sdfAnnotateInfo    # ① 确认这次真的生成了
+head -30 sdfAnnotateInfo                       # ② 确认 SDF 路径 / scope / min-typ-max
+tail -40 sdfAnnotateInfo                       # ③ 先看反标率汇总（VCS 2018+）
+
+grep -inE "warn|error|fail|not found|cannot|unable|ignor" \
+     sdfAnnotateInfo > ann_fail.txt            # ④ 抽失败行
+grep -oE "tb\.dut[A-Za-z0-9_.\[\]]*" ann_fail.txt | sort -u > fail_inst.txt
+cut -d. -f1-3 fail_inst.txt | sort | uniq -c | sort -rn | head -20   # ⑤ 按层次聚合
+
+grep -viE "spare|tie(hi|lo)|fill|decap|tap" fail_inst.txt > fail_real.txt
+[ -s fail_real.txt ] && { echo "ANNOTATION FAILED"; head -20 fail_real.txt; exit 1; }
 
 # ========== 跑之后：验证生效 ==========
 # 1) 波形量一个 FF 的 CK→Q，与 SDF 数值核对
@@ -2725,6 +2948,10 @@ grep -i "timescale" comp.log                   # 单位一致性
           <td>SDF <code>TIMESCALE</code> 与 <code>`timescale</code> 精度不匹配，被舍入</td></tr>
       <tr><td>用 <code>+typdelays</code> 跑 <code>min::max</code> 风格的 SDF</td>
           <td>typ 位为空 → 静默退回库默认值</td></tr>
+      <tr><td><code>sdfAnnotateInfo</code> 里一条失败都没有，但实际大面积没反标</td>
+          <td>编译时<strong>忘了加 <code>-diag=sdf:verbose</code></strong>，看到的是上次残留的旧文件；
+              或 SDF 解析中途提前结束，根本没走到失败那一步 ——
+              必须先确认文件时间戳，再对账反标率 / CELL 数</td></tr>
     </tbody>
   </table>
 
