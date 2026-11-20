@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>VCS 仿真加速手段</title>
+<style>:root{--bg:#ffffff;--fg:#1f2328;--muted:#656d76;--line:#d1d9e0;--code-bg:#f6f8fa;--accent:#0969da;--warn-bg:#fff8c5;--warn-line:#d4a72c;--ok-bg:#dafbe1;--ok-line:#2da44e;--bad-bg:#ffebe9;--bad-line:#cf222e}
+*{box-sizing:border-box}
+body{margin:0;padding:0 24px 80px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans","PingFang SC","Microsoft YaHei",Helvetica,Arial,sans-serif;font-size:16px;line-height:1.7;color:var(--fg);background:var(--bg)}
+.wrap{max-width:900px;margin:0 auto}
+header{padding:40px 0 8px}
+h1{font-size:30px;font-weight:600;margin:0 0 8px;line-height:1.3}
+header .sub{color:var(--muted);font-size:15px;margin:0}
+h2{font-size:23px;font-weight:600;margin:48px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+h3{font-size:18px;font-weight:600;margin:32px 0 12px}
+h4{font-size:16px;font-weight:600;margin:24px 0 8px}
+h5{font-size:14.5px;font-weight:600;margin:20px 0 6px;color:var(--accent)}
+p{margin:12px 0}
+ul,ol{margin:12px 0;padding-left:26px}
+li{margin:6px 0}
+code{font-family:ui-monospace,Consolas,"Courier New",monospace;font-size:13.5px;background:var(--code-bg);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin:16px 0;overflow-x:auto}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.55}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14.5px}
+th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+th{background:var(--code-bg);font-weight:600}
+.note,.warn,.good,.bad{padding:12px 16px;margin:16px 0;border-radius:6px;border-left:4px solid var(--accent);background:#ddf4ff}
+.warn{border-left-color:var(--warn-line);background:var(--warn-bg)}
+.good{border-left-color:var(--ok-line);background:var(--ok-bg)}
+.bad{border-left-color:var(--bad-line);background:var(--bad-bg)}
+.note p:first-child,.warn p:first-child,.good p:first-child,.bad p:first-child{margin-top:0}
+.note p:last-child,.warn p:last-child,.good p:last-child,.bad p:last-child{margin-bottom:0}
+.diagram{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:18px;margin:16px 0;overflow-x:auto;font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre}
+.formula{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:14px 18px;margin:16px 0;text-align:center;font-family:ui-monospace,Consolas,monospace;font-size:15px;overflow-x:auto}
+.mindmap{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:24px 20px;margin:20px 0;overflow-x:auto}
+.mindmap ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;justify-content:center}
+.mindmap li{display:flex;align-items:center;position:relative;margin:0;padding:3px 0}
+.mindmap li>ul{position:relative;padding-left:34px;margin:0}
+.mindmap li>ul::before{content:"";position:absolute;left:0;top:50%;width:16px;border-top:1px solid var(--line)}
+.mindmap li>ul>li::before{content:"";position:absolute;left:-18px;top:50%;width:18px;border-top:1px solid var(--line)}
+.mindmap li>ul>li::after{content:"";position:absolute;left:-18px;top:0;bottom:0;border-left:1px solid var(--line)}
+.mindmap li>ul>li:first-child::after{top:50%}
+.mindmap li>ul>li:last-child::after{bottom:50%}
+.mindmap li>ul>li:only-child::after{display:none}
+.mindmap .n{display:inline-block;white-space:nowrap;padding:5px 11px;border-radius:5px;border:1px solid var(--line);background:#fff;font-size:13.5px;line-height:1.4;text-decoration:none;color:var(--fg)}
+.mindmap a.n:hover{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 2px #ddf4ff}
+.mindmap .l0{background:var(--accent);color:#fff;border-color:var(--accent);font-size:16px;font-weight:600;padding:9px 18px}
+.mindmap .l1{background:#ddf4ff;border-color:#9fd0fb;font-weight:600;color:#0a4a82}
+.mindmap .hot{background:var(--ok-bg);border-color:var(--ok-line);font-weight:600}
+.mindmap .risk{background:var(--bad-bg);border-color:var(--bad-line)}
+.mindmap .tag{color:var(--muted);font-size:12px;font-weight:400;margin-left:6px}
+.mm-legend{display:flex;flex-wrap:wrap;gap:16px;margin:10px 0 0;padding-top:12px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.mm-legend span::before{content:"";display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid var(--line)}
+.mm-legend .k-hot::before{background:var(--ok-bg);border-color:var(--ok-line)}
+.mm-legend .k-risk::before{background:var(--bad-bg);border-color:var(--bad-line)}
+.mm-legend .k-norm::before{background:#fff}
+.part{margin:72px 0 8px;padding:16px 20px;border-radius:8px;background:#ddf4ff;border:1px solid #9fd0fb}
+.part .pn{font-size:12px;color:var(--accent);font-weight:600;letter-spacing:1px}
+.part h2{border:0;margin:2px 0 0;padding:0;font-size:26px}
+.part .pd{margin:6px 0 0;color:#4a5a6a;font-size:14px}
+footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+#nav{position:fixed;top:0;left:0;width:264px;height:100vh;overflow-y:auto;padding:28px 14px 40px;background:var(--code-bg);border-right:1px solid var(--line);font-size:13.5px;line-height:1.5;z-index:20}
+#nav .nav-title{font-weight:600;font-size:14px;margin:0 0 12px;padding-left:8px;color:var(--fg)}
+#nav a{display:block;color:var(--muted);text-decoration:none;padding:3px 8px;border-radius:4px;border-left:2px solid transparent}
+#nav a:hover{background:#eaeef2;color:var(--fg)}
+#nav a.active{color:var(--accent);background:#ddf4ff;border-left-color:var(--accent);font-weight:600}
+#nav a.lv1{font-weight:600;color:var(--fg);margin-top:10px}
+#nav a.lv2{padding-left:20px}
+#nav a.lv3{padding-left:34px;font-size:13px}
+#nav a.lv4{padding-left:48px;font-size:12.5px}
+body.has-nav .wrap{margin-left:264px}
+#nav-toggle{display:none;position:fixed;top:12px;left:12px;z-index:30;width:38px;height:38px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:17px;cursor:pointer}
+@media (max-width:1180px){#nav{transform:translateX(-100%);transition:transform .2s ease}#nav.open{transform:none;box-shadow:0 0 0 100vmax rgba(0,0,0,.25)}body.has-nav .wrap{margin-left:0}#nav-toggle{display:block}header{padding-top:60px}}</style>
+</head>
+<body class="has-nav">
+<button id="nav-toggle" title="目录">☰</button>
+<nav id="nav">
+<p class="nav-title">目录</p>
+<a class="lv1" href="#P0">第零部分 · 总览</a>
+<a class="lv2" href="#0">0. 加速手段全景图</a>
+<a class="lv2" href="#0-2">0.2 先 Profiling 再优化</a>
+<a class="lv1" href="#P1">第一部分 · 编译加速</a>
+<a class="lv2" href="#1">1. 并行编译 -j</a>
+<a class="lv2" href="#2">2. 增量编译</a>
+<a class="lv2" href="#3">3. 分区编译 partcomp</a>
+<a class="lv2" href="#4">4. 三步流程与预编译库</a>
+<a class="lv3" href="#4-2">4.2 库机制 -work / -L</a>
+<a class="lv3" href="#4-4">4.4 UVM 预编译库</a>
+<a class="lv3" href="#4-5">4.5 VIP / cell 库</a>
+<a class="lv3" href="#4-6">4.6 DPI-C 预编译 .so</a>
+<a class="lv3" href="#4-7">4.7 -Mdir / -Mlib 缓存</a>
+<a class="lv2" href="#5">5. 调试开关的代价</a>
+<a class="lv1" href="#P2">第二部分 · 运行加速（单核）</a>
+<a class="lv2" href="#6">6. 波形 dump 策略</a>
+<a class="lv2" href="#7">7. UVM 打印与 verbosity</a>
+<a class="lv2" href="#8">8. 覆盖率与断言开销</a>
+<a class="lv2" href="#9">9. 时序检查与门级优化</a>
+<a class="lv2" href="#10">10. +rad 与两态仿真</a>
+<a class="lv2" href="#11">11. TB 代码级优化</a>
+<a class="lv2" href="#12">12. Save / Restore</a>
+<a class="lv1" href="#P3">第三部分 · 多核加速</a>
+<a class="lv2" href="#13">13. 三类并行的区别</a>
+<a class="lv2" href="#14">14. FGP 细粒度并行</a>
+<a class="lv3" href="#14-3">14.3 操作 Demo</a>
+<a class="lv3" href="#14-5">14.5 适用与不适用</a>
+<a class="lv3" href="#14-6">14.6 一致性比对流程</a>
+<a class="lv2" href="#15">15. ALP 应用级并行</a>
+<a class="lv2" href="#16">16. SmartCompile / 多机回归</a>
+<a class="lv1" href="#P4">第四部分 · 汇总对比</a>
+<a class="lv2" href="#17">17. 全手段对比总表</a>
+<a class="lv2" href="#18">18. 按瓶颈选型决策树</a>
+<a class="lv2" href="#19">19. 分级回归配置模板</a>
+<a class="lv2" href="#20">20. 易错点与风险清单</a>
+</nav>
+<div class="wrap">
+<header>
+<h1>VCS 仿真加速手段</h1>
+<p class="sub">编译期并行 / 增量 / 分区 · 运行期 dump 与 verbosity 控制 · 覆盖率与时序检查开销 · 多核 FGP 与 ALP · Save/Restore · 分级回归策略与全手段汇总对比</p>
+</header>
+<div class="part" id="P0">
+<div class="pn">第 零 部 分</div>
+<h2>总览</h2>
+<p class="pd">先建立「编译慢」与「运行慢」两条独立的优化轴，再明确一条铁律：所有加速都必须先 profiling 定位瓶颈，再对症下药，否则大概率在无效选项上浪费 license 和时间。</p>
+</div>
+<h2 id="0">0. 加速手段全景图</h2>
+<p>下图每个节点都可以点击，直接跳到对应章节。</p>
+<div class="mindmap">
+<ul>
+<li><span class="n l0">VCS 加速</span>
+  <ul>
+    <li><a class="n l1" href="#P1">编译期<span class="tag">缩短 compile 墙钟</span></a>
+      <ul>
+        <li><a class="n hot" href="#1">并行编译 -j<span class="tag">最简单 · 必开</span></a></li>
+        <li><a class="n hot" href="#2">增量编译<span class="tag">别 rm -rf</span></a></li>
+        <li><a class="n" href="#3">分区编译 partcomp<span class="tag">大设计 50%+</span></a></li>
+        <li><a class="n hot" href="#4">预编译库 / 三步流程<span class="tag">vlogan + vcs</span></a>
+          <ul>
+            <li><a class="n" href="#4-4">UVM 库 -ntb_opts</a></li>
+            <li><a class="n hot" href="#4-5">VIP / cell 库<span class="tag">门级收益最大</span></a></li>
+            <li><a class="n" href="#4-6">DPI .so -sv_lib</a></li>
+            <li><a class="n risk" href="#4-7">-Mlib 共享缓存<span class="tag">版本必须一致</span></a></li>
+          </ul>
+        </li>
+        <li><a class="n risk" href="#5">debug_access 开销<span class="tag">编译与运行双杀</span></a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#P2">运行期 · 单核<span class="tag">减少无用工作量</span></a>
+      <ul>
+        <li><a class="n hot" href="#6">波形 dump 策略<span class="tag">头号杀手</span></a></li>
+        <li><a class="n hot" href="#7">UVM verbosity<span class="tag">字符串格式化开销</span></a></li>
+        <li><a class="n" href="#8">覆盖率 / 断言分级</a></li>
+        <li><a class="n" href="#9">时序检查 nospecify<span class="tag">门级专用</span></a></li>
+        <li><a class="n" href="#10">+rad / 两态仿真<span class="tag">需 license · 有代价</span></a></li>
+        <li><a class="n" href="#11">TB 代码级优化<span class="tag">随机化 / DPI</span></a></li>
+        <li><a class="n hot" href="#12">Save / Restore<span class="tag">跳过 boot</span></a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#P3">运行期 · 多核<span class="tag">一个 case 用多核</span></a>
+      <ul>
+        <li><a class="n hot" href="#14">FGP 细粒度并行<span class="tag">切分仿真内核</span></a>
+          <ul>
+            <li><a class="n" href="#14-3">-fgp=multi_steps</a></li>
+            <li><a class="n" href="#14-3">-fgp=num_threads:N</a></li>
+            <li><a class="n risk" href="#14-6">调度顺序差异<span class="tag">必须一致性比对</span></a></li>
+          </ul>
+        </li>
+        <li><a class="n hot" href="#15">ALP 应用级并行<span class="tag">dump / cov 卸载</span></a></li>
+        <li><a class="n" href="#16">LSF 多机回归<span class="tag">吞吐最优</span></a></li>
+      </ul>
+    </li>
+    <li><a class="n l1" href="#0-2">方法论</a>
+      <ul>
+        <li><a class="n hot" href="#0-2">simprofile 先量后优</a></li>
+        <li><a class="n" href="#19">分级回归 smoke / func / cov</a></li>
+        <li><a class="n" href="#18">按瓶颈选型决策树</a></li>
+        <li><a class="n risk" href="#20">易错点清单</a></li>
+      </ul>
+    </li>
+  </ul>
+</li>
+</ul>
+<div class="mm-legend">
+<span class="k-hot">优先尝试 / 收益高</span>
+<span class="k-risk">风险点 / 陷阱</span>
+<span class="k-norm">一般选项</span>
+</div>
+</div>
+<div class="note">
+<p>图里最关键的一点：<strong>「编译慢」和「运行慢」是两个独立问题，解法完全不交叉</strong>。<code>-j</code> / <code>partcomp</code> 只影响编译，<code>-fgp</code> / <code>-parallel</code> 只影响运行。日常抱怨「仿真太慢」时，先分清是哪一个，否则容易加了一堆选项却毫无效果。</p>
+</div>
+
+<h2 id="0-2">0.2 先 Profiling 再优化</h2>
+<p>任何加速动作之前，先用 VCS 自带的 profiler 量一次。盲猜瓶颈是最大的时间浪费。</p>
+<pre><code># 编译时打开 profiling 支持
+vcs -full64 -sverilog -simprofile  &lt;files&gt; -o simv
+
+# 运行：time + mem 双维度
+./simv -simprofile time+mem +UVM_TESTNAME=my_test
+
+# 生成报告
+profrpt -view simprofile_dir            # 文本报告
+# 或用 Verdi Performance Analyzer 图形查看
+verdi -simprofile simprofile_dir</code></pre>
+<p>报告给出三类关键信息：</p>
+<table>
+<tr><th>报告维度</th><th>看什么</th><th>典型结论</th></tr>
+<tr><td>Top modules / instances</td><td>哪个层次消耗时间最多</td><td>如 DDR PHY、SERDES 模型占 40% → 换行为级模型</td></tr>
+<tr><td>Top constructs</td><td><code>always</code> / <code>assign</code> / SVA / DPI 各占多少</td><td>SVA 占比高 → 回归关 cover</td></tr>
+<tr><td>Category 分类</td><td>Design / Testbench / Dump / Coverage / PLI</td><td>Dump + Coverage 合计 60% → 先砍这两项</td></tr>
+<tr><td>Memory 热点</td><td>哪个数组/MDA 占内存</td><td>大 memory 的 dump 要单独关掉</td></tr>
+</table>
+<div class="good">
+<p><strong>经验分布</strong>：一个未优化的 UVM 回归，典型开销构成大致是——波形 dump 25~40%、<code>debug_access+all</code> 带来的通用化代码 15~30%、UVM 打印与字符串格式化 10~20%、覆盖率采样 5~15%，真正的 DUT 事件计算往往不到三分之一。这也解释了为什么「先砍无用工作量」比「上多核」性价比高得多。</p>
+</div>
+<div class="warn">
+<p><code>-simprofile</code> 本身会带来 5~15% 的额外开销，并且会抑制部分优化。它只用于分析，<strong>不要留在正式回归里</strong>。</p>
+</div>
+
+<div class="part" id="P1">
+<div class="pn">第 一 部 分</div>
+<h2>编译加速</h2>
+<p class="pd">目标是缩短「改一行代码到能跑起来」的周期。核心是三件事：把编译并行化、只重编改动的部分、以及不要为了调试便利付出全程代价。</p>
+</div>
+
+<h2 id="1">1. 并行编译 -j</h2>
+<h3 id="1-1">1.1 原理</h3>
+<p>VCS 编译分为两个阶段：<strong>elaboration</strong>（分析层次、建立数据结构，基本是串行的）和 <strong>C 代码生成 + gcc 编译 + 链接</strong>（可以按文件并行）。<code>-j</code> 作用在后半段，把生成的大量 <code>.c</code> 文件分发给多个 gcc 进程。</p>
+<h3 id="1-2">1.2 操作 Demo</h3>
+<pre><code># 编译阶段并行（注意 -j 与数字之间无空格也可，两种写法都接受）
+vcs -full64 -sverilog -timescale=1ns/1ps \
+    -j8 \
+    -f filelist.f -top tb_top -o simv
+
+# 配合 makefile 的 -j 一起用（两层并行互不冲突）
+make -j4 compile VCS_J=8</code></pre>
+<div class="warn">
+<p><code>-j</code> 的数字<strong>不要无脑拉满</strong>。gcc 进程是内存密集型的，8 个并行 gcc 在大设计上可能占 30 GB+，一旦触发 swap 会比串行更慢。LSF 环境下必须和 <code>bsub -n 8 -R "rusage[mem=...]"</code> 申请的资源匹配，否则会被 kill。</p>
+</div>
+<h3 id="1-3">1.3 优缺点</h3>
+<table>
+<tr><th>优点</th><th>缺点 / 代价</th></tr>
+<tr><td>零风险：不改变仿真语义，结果位级一致</td><td>只加速编译，对运行时间<strong>毫无影响</strong></td></tr>
+<tr><td>无需额外 license</td><td>加速比受 Amdahl 限制：elaboration 串行段不能并行，大设计里这段可能占一半</td></tr>
+<tr><td>一行选项，立刻生效</td><td>内存占用随 N 线性增长，容易 OOM</td></tr>
+<tr><td>可与所有其它选项共存</td><td>N &gt; 8 之后收益明显递减</td></tr>
+</table>
+
+<h2 id="2">2. 增量编译</h2>
+<h3 id="2-1">2.1 原理</h3>
+<p>VCS 默认就是<strong>增量编译</strong>的。编译产物放在 <code>simv.daidir/</code>（以及 <code>csrc/</code>）里，再次编译时 VCS 比较源文件时间戳与依赖关系，只重新生成受影响模块的代码。</p>
+<div class="bad">
+<p><strong>最常见的自毁行为</strong>：Makefile 里写了 <code>clean: rm -rf simv* csrc/ *.daidir</code>，然后每次 <code>make</code> 都先 <code>clean</code>。这等于主动关掉增量编译，把 2 分钟的增量编译变成 30 分钟的全量编译。</p>
+</div>
+<h3 id="2-2">2.2 操作 Demo</h3>
+<pre><code># 正确的做法：日常编译不 clean，直接重跑同一条命令
+vcs -full64 -sverilog -j8 -f filelist.f -top tb_top -o simv
+# 改了 dut_core.v 之后，仍然执行上面那条命令即可（只重编受影响部分）
+
+# 什么时候必须 clean？
+#   - 改了编译选项（-debug_access、timescale、define 等）
+#   - 换了 VCS 版本
+#   - filelist 增删文件导致层次变化
+#   - 出现莫名的 elaboration 错误（怀疑产物损坏）
+make clean   # 仅在以上情况执行</code></pre>
+<p>Makefile 推荐把 clean 和 compile 彻底分开，避免误触：</p>
+<pre><code>COMP_OPT = -full64 -sverilog -j8 -timescale=1ns/1ps
+
+compile:                      ## 增量编译（日常用）
+	vcs $(COMP_OPT) -f filelist.f -top tb_top -o simv
+
+rebuild: clean compile        ## 全量重编（显式要求时才用）
+
+clean:
+	rm -rf simv simv.daidir csrc ucli.key vc_hdrs.h</code></pre>
+<h3 id="2-3">2.3 优缺点</h3>
+<table>
+<tr><th>优点</th><th>缺点 / 代价</th></tr>
+<tr><td>默认开启，零成本，日常改 RTL/TB 时收益最大（常 5~10x）</td><td>对「改了全局 define / 顶层参数」的场景无效，依赖链一旦触顶就是全量</td></tr>
+<tr><td>与 <code>-j</code>、<code>partcomp</code> 可叠加</td><td>产物目录会持续增长，占磁盘；多人共用目录时容易冲突</td></tr>
+<tr><td>语义完全一致，无风险</td><td>偶发产物不一致会表现为诡异错误，排查时要记得先 clean 验证</td></tr>
+</table>
+
+<h2 id="3">3. 分区编译 partcomp</h2>
+<h3 id="3-1">3.1 原理</h3>
+<p>把设计按层次切成多个<strong>编译分区</strong>（partition），每个分区独立 elaborate 和生成代码，然后并行编译。与 <code>-j</code> 的区别是：<code>-j</code> 只并行 gcc，<strong>partcomp 把 elaboration 这段串行瓶颈也切开了</strong>，因此在超大设计上收益远高于单纯 <code>-j</code>。</p>
+<div class="diagram">普通编译：   [ elaborate 全设计 ]───[ codegen ]───[ gcc -j8 ]───[ link ]
+                 ↑ 串行，大设计占一半时间
+
+partcomp：   [ elab P1 ]┐
+             [ elab P2 ]├─并行─[ codegen 并行 ]─[ gcc 并行 ]─[ link ]
+             [ elab P3 ]┘</div>
+<h3 id="3-2">3.2 操作 Demo</h3>
+<pre><code># 方式一：全自动分区（最省事）
+vcs -full64 -sverilog -fastpartcomp=j8 \
+    -f filelist.f -top tb_top -o simv
+
+# 方式二：手工指定分区边界（对关键大模块单独成区，效果更可控）
+#   partition.cfg 内容示例：
+#     partition -module dut_core
+#     partition -module ddr_phy
+#     partition -module cpu_cluster
+vcs -full64 -sverilog -partcomp -partcomp_cfg_file partition.cfg -j8 \
+    -f filelist.f -top tb_top -o simv</code></pre>
+<div class="note">
+<p>分区的粒度原则：<strong>每个分区体量尽量均衡，且分区边界选在接口信号少、层次清晰的位置</strong>。把一个占 60% 代码量的模块单独划一个区，其它分区很快跑完却要等它，并行度等于白给。</p>
+</div>
+<h3 id="3-3">3.3 优缺点</h3>
+<table>
+<tr><th>优点</th><th>缺点 / 代价</th></tr>
+<tr><td>大设计（百万门以上 / 全芯片）编译时间常降 40~60%</td><td>小设计几乎无收益，分区管理反而是净开销</td></tr>
+<tr><td>把串行 elaboration 并行化，突破 <code>-j</code> 的加速上限</td><td>手工分区需要理解设计层次，配置文件要随设计演进维护</td></tr>
+<tr><td>增量编译粒度变为「分区级」，改一个分区只重编该区</td><td>分区边界上的跨界优化会被削弱，<strong>运行速度可能略降（几个百分点）</strong></td></tr>
+<tr><td>对回归流水线的墙钟时间改善明显</td><td>某些选项（特定 debug / 特定 PLI）与 partcomp 不兼容，需查版本说明</td></tr>
+</table>
+
+<h2 id="4">4. 三步流程与预编译库</h2>
+<h3 id="4-1">4.1 原理：预编译到底省掉了什么</h3>
+<p>VCS 支持两种使用方式：</p>
+<ul>
+<li><strong>一步法</strong>：<code>vcs &lt;all files&gt;</code>，每次都重新分析所有源文件。</li>
+<li><strong>三步法</strong>：<code>vlogan</code>（分析，产物进 library）→ <code>vcs -top</code>（elaborate + 编译）→ <code>simv</code>（运行）。</li>
+</ul>
+<p>一次 <code>vcs</code> 编译内部其实有四段工作，预编译的作用是<strong>把前面几段的产物缓存下来，让后续编译直接从中间状态开始</strong>：</p>
+<div class="diagram">源码 ──① analyze ──→ 语法树/库单元 ──② elaborate ──→ 实例化层次 ──③ codegen ──→ C 代码 ──④ gcc+link ──→ simv
+       ↑                         ↑                                            ↑
+       └ vlogan 预编译库          └ partcomp 并行（§3）                        └ -j / -Mlib 缓存
+         （本章）                                                               （本章 4.7）</div>
+<p>换句话说：<a href="#1"><code>-j</code></a> 优化的是第 ④ 段，<a href="#3">partcomp</a> 优化的是第 ②③ 段，而<strong>预编译优化的是第 ① 段，并且是把它彻底消灭掉</strong>——稳定不变的代码永远不再被分析第二次。</p>
+<p>哪些东西值得预编译，取决于「体量 × 变更频率」：</p>
+<table>
+<tr><th>对象</th><th>analyze 典型耗时</th><th>变更频率</th><th>是否值得预编译</th></tr>
+<tr><td>UVM 基类库（<code>uvm_pkg</code>）</td><td>30s ~ 2min</td><td>整个项目周期内为零</td><td><strong>必须</strong>（<a href="#4-4">§4.4</a>）</td></tr>
+<tr><td>第三方 VIP（PCIe/DDR/AMBA）</td><td>1 ~ 10min</td><td>几个月一次</td><td><strong>必须</strong>（<a href="#4-5">§4.5</a>）</td></tr>
+<tr><td>标准单元 / IO / memory 库</td><td>1 ~ 20min（上万 cell）</td><td>流片周期内基本为零</td><td><strong>必须</strong>（<a href="#4-5">§4.5</a>）</td></tr>
+<tr><td>已冻结的子系统 RTL</td><td>视规模</td><td>低</td><td>推荐</td></tr>
+<tr><td>DPI-C / PLI 的 C 代码</td><td>数秒 ~ 数分钟</td><td>低~中</td><td><strong>推荐</strong>（<a href="#4-6">§4.6</a>，还能免去重编 simv）</td></tr>
+<tr><td>正在改的 DUT RTL / TB</td><td>—</td><td>每天几十次</td><td>不需要，交给<a href="#2">增量编译</a></td></tr>
+</table>
+
+<h3 id="4-2">4.2 库机制：synopsys_sim.setup 与 -work / -L</h3>
+<p>预编译的载体是 <strong>library（库目录）</strong>。VCS 通过当前目录下的 <code>synopsys_sim.setup</code> 把「逻辑库名」映射到「物理路径」：</p>
+<pre><code># ---- synopsys_sim.setup ----
+# 默认库：vlogan 不加 -work 时产物进这里
+WORK          &gt; DEFAULT
+DEFAULT       : ./work
+
+# 预编译库：指向团队公共只读路径
+UVM_LIB       : /proj/common/libs/vcs2023/uvm_lib
+VIP_LIB       : /proj/common/libs/vcs2023/vip_lib
+CELL_LIB      : /proj/common/libs/vcs2023/tsmc22_cell
+RTL_FROZEN    : /proj/chipA/libs/rtl_frozen</code></pre>
+<p>两个关键选项：</p>
+<table>
+<tr><th>选项</th><th>用在哪一步</th><th>含义</th></tr>
+<tr><td><code>-work &lt;LIB&gt;</code></td><td><code>vlogan</code></td><td>把分析产物<strong>写入</strong>哪个库（写方向）</td></tr>
+<tr><td><code>-L &lt;LIB&gt;</code></td><td><code>vcs</code> / <code>vlogan</code></td><td>elaborate 时到哪些库里<strong>查找</strong>未解析的模块（读方向，可多次指定，按顺序搜索）</td></tr>
+<tr><td><code>-liblist</code> / <code>-v</code> / <code>-y</code></td><td><code>vcs</code></td><td>Verilog-XL 风格的库搜索，与 <code>-L</code> 并存；门级流程里常见</td></tr>
+</table>
+<div class="warn">
+<p><strong>库是与「VCS 版本 + 关键编译选项」强绑定的</strong>。<code>timescale</code>、<code>-sverilog</code>、全局 <code>+define</code>、<code>-full64</code> 不一致时，轻则报错，重则行为诡异。公共库路径里<strong>一定要带 VCS 版本号</strong>（如 <code>libs/vcs2023.03/</code>），升级工具时整体重建，不要原地覆盖。</p>
+</div>
+
+<h3 id="4-3">4.3 操作 Demo：完整三步流程</h3>
+<pre><code># ================= 一次性：建公共预编译库（由 CI 或 flow owner 跑） =================
+mkdir -p /proj/common/libs/vcs2023/{vip_lib,tsmc22_cell}
+
+# VIP / 第三方 IP
+vlogan -full64 -sverilog -work VIP_LIB  -f vip_filelist.f
+
+# 标准单元库（门级仿真用）
+vlogan -full64 -v2005 -work CELL_LIB -f cell_filelist.f
+
+# ================= 日常：项目编译 =================
+# ---- Step 1：analyze（只分析自己会改的代码） ----
+vlogan -full64 -sverilog -timescale=1ns/1ps \
+       -ntb_opts uvm-1.2 \
+       -f rtl_filelist.f -f tb_filelist.f        # 产物进 DEFAULT(./work)
+
+# ---- Step 2：elaborate（从多个库里取已编译单元） ----
+vcs -full64 -sverilog -ntb_opts uvm-1.2 -j8 \
+    -L VIP_LIB -L CELL_LIB \
+    -top tb_top -o simv
+
+# ---- Step 3：run ----
+./simv +UVM_TESTNAME=my_test +UVM_VERBOSITY=UVM_LOW</code></pre>
+<div class="note">
+<p>注意 Step 1 的 filelist 里<strong>只有自己的 RTL 和 TB</strong>——VIP 和 cell 库不在里面。这正是预编译的收益来源：日常改一行代码重编时，VCS 完全不会去碰那几万行 VIP 源码。</p>
+</div>
+
+<h3 id="4-4">4.4 UVM 预编译库</h3>
+<p>UVM 是最典型、也最容易被浪费掉的预编译对象。VCS 安装包里自带已经编译好的 UVM 库，用 <code>-ntb_opts</code> 直接引用即可：</p>
+<pre><code># ✅ 正确：使用 VCS 自带的预编译 UVM 库
+vlogan -full64 -sverilog -ntb_opts uvm-1.2 -f tb_filelist.f
+vcs    -full64 -sverilog -ntb_opts uvm-1.2 -j8 -top tb_top -o simv
+
+# ❌ 常见错误：手工把 uvm_pkg.sv 塞进 filelist，每次编译都重编一遍 UVM
+#   vcs -full64 -sverilog +incdir+$UVM_HOME/src $UVM_HOME/src/uvm_pkg.sv ...</code></pre>
+<p>如果因为要打 patch、或要用官方未随包提供的 UVM 版本而必须自己编，那就<strong>自己建一个 UVM 库，而不是每次编译都带源码</strong>：</p>
+<pre><code># 一次性建库
+vlogan -full64 -sverilog -work UVM_LIB \
+       +incdir+$UVM_HOME/src $UVM_HOME/src/uvm_pkg.sv
+
+# 之后所有编译只引用
+vcs -full64 -sverilog -L UVM_LIB -j8 -top tb_top -o simv</code></pre>
+<div class="good">
+<p>UVM 的 <code>uvm_pkg</code> 是一个巨大的单一 package，analyze 耗时几乎全是固定成本。一个典型 TB 每天编译几十次，省掉这一分钟，一天就是半小时以上的净收益，而代价是零。</p>
+</div>
+
+<h3 id="4-5">4.5 VIP 与标准单元库预编译</h3>
+<p>这两类是体量最大的「只读代码」，也是预编译收益最高的地方。</p>
+<pre><code># ---- VIP：按供应商 / 协议分库，便于独立更新 ----
+vlogan -full64 -sverilog -work VIP_PCIE -f $PCIE_VIP_HOME/filelist.f
+vlogan -full64 -sverilog -work VIP_DDR  -f $DDR_VIP_HOME/filelist.f
+
+vcs -full64 -sverilog -j8 -L VIP_PCIE -L VIP_DDR -top tb_top -o simv
+
+# ---- 门级：标准单元 / IO / memory ----
+# 传统写法每次编译都要扫描 -v / -y 指定的上万个 cell 文件
+#   vcs ... -v /pdk/tsmc22/stdcell.v -y /pdk/tsmc22/io/ +libext+.v
+# 改为预编译一次：
+vlogan -full64 -v2005 -work CELL_LIB \
+       /pdk/tsmc22/stdcell.v /pdk/tsmc22/io/*.v /pdk/tsmc22/mem/*.v
+
+vcs -full64 -j8 -L CELL_LIB +nospecify +notimingcheck \
+    -f netlist.f -top tb_top -o simv_gl</code></pre>
+<div class="note">
+<p>门级流程里这一步尤其值得做：一次全芯片网表编译中，<strong>扫描和分析 cell 库经常占掉 30~50% 的编译时间</strong>，而这些 cell 在整个流片周期内一个字都不会变。注意 cell 库的 <code>-v2005</code> / <code>-sverilog</code> 模式和 timescale 要与主编译保持一致。</p>
+</div>
+
+<h3 id="4-6">4.6 DPI-C / PLI 的预编译 .so</h3>
+<p>如果把 <code>.c</code> 文件直接交给 <code>vcs</code>，那么每次编译都会重新 gcc 一遍，<strong>而且改一行 C 代码就必须重新 link 整个 simv</strong>。更好的做法是预先编成动态库，运行时加载：</p>
+<pre><code># ---- 一次性：把 C 模型编成 .so ----
+gcc -fPIC -shared -O2 -I$VCS_HOME/include \
+    -o libdpi_model.so  dpi_model.c  ref_model.c
+
+# ---- 编译 simv 时不带任何 .c 文件 ----
+vcs -full64 -sverilog -j8 -f filelist.f -top tb_top -o simv
+
+# ---- 运行时动态加载（改 C 代码后只需重编 .so，simv 不用重编！）----
+./simv -sv_lib libdpi_model +UVM_TESTNAME=my_test
+#   注意：-sv_lib 后面不带 .so 后缀
+
+# ---- 对比：静态链接方式（改 C 就要重 link simv，慢）----
+# vcs -full64 -sverilog dpi_model.c ref_model.c -f filelist.f -o simv</code></pre>
+<div class="good">
+<p>这条的价值不只是编译加速，更是<strong>调试 C 参考模型时的迭代速度</strong>：从「改 C → 重编 simv（几分钟~几十分钟）」变成「改 C → 重编 .so（几秒）→ 直接跑」。对于带 C reference model 的验证环境，这往往是单项收益最大的流程改进。</p>
+</div>
+<div class="warn">
+<p>预编译 <code>.so</code> 的 gcc 版本、<code>-m64</code>、以及是否 <code>-fPIC</code> 必须与 VCS 要求匹配；另外 <a href="#14">FGP 多线程</a> 场景下，<code>.so</code> 里的全局变量必须是线程安全的（见 <a href="#14-5">§14.5</a>）。</p>
+</div>
+
+<h3 id="4-7">4.7 -Mdir / -Mlib：共享编译缓存</h3>
+<p>除了源码层面的库，VCS 还能缓存 <strong>codegen + 目标文件</strong> 这一层产物，并在多人之间共享：</p>
+<table>
+<tr><th>选项</th><th>作用</th><th>典型用法</th></tr>
+<tr><td><code>-Mdir=&lt;dir&gt;</code></td><td>指定增量编译产物目录（默认 <code>csrc</code>）</td><td>多个 TB 配置各用独立 <code>-Mdir</code>，避免互相踩而退化成全量编译</td></tr>
+<tr><td><code>-Mlib=&lt;dir&gt;</code></td><td>指定<strong>共享</strong>的描述符/目标文件库，可跨用户、跨工作区复用已编译模块</td><td>CI 先编一份公共缓存，个人编译命中缓存直接复用</td></tr>
+<tr><td><code>-Mupdate</code></td><td>控制增量编译的更新行为</td><td>一般不需要显式指定</td></tr>
+</table>
+<pre><code># 多配置并存：各自独立的增量目录，互不污染
+vcs $(OPT) -Mdir=csrc_rtl  -f rtl.f   -top tb_top -o simv_rtl
+vcs $(OPT) -Mdir=csrc_gl   -f gl.f    -top tb_top -o simv_gl
+
+# 团队共享编译缓存（CI 维护一份只读公共缓存）
+vcs $(OPT) -Mlib=/proj/chipA/shared_mlib -Mdir=csrc -f filelist.f -top tb_top -o simv</code></pre>
+<div class="warn">
+<p><code>-Mlib</code> 的收益与风险都很明显：命中率高时个人全量编译可以大幅缩短，但<strong>共享缓存必须保证「同一 VCS 版本 + 同一套编译选项」</strong>，否则会出现难以定位的行为差异。实践中建议公共缓存设为只读、由 CI 统一生成，个人只读不写。具体支持情况请以本版本 <code>vcs -help</code> 和 User Guide 为准。</p>
+</div>
+
+<h3 id="4-8">4.8 优缺点</h3>
+<table>
+<tr><th>优点</th><th>缺点 / 代价</th></tr>
+<tr><td>稳定代码（UVM / VIP / cell 库 / 冻结 RTL）只分析一次，长期复用</td><td>流程变复杂：多出 <code>synopsys_sim.setup</code> 和库目录要管理</td></tr>
+<tr><td>库可多人 / 多项目共享，是少数能带来<strong>团队级</strong>收益的手段</td><td>库与 VCS 版本、编译选项绑定，版本升级必须全部重建</td></tr>
+<tr><td>门级流程收益最大（cell 库分析常占编译时间 30~50%）</td><td>公共库需要 owner 维护，权限与路径规范要先立好</td></tr>
+<tr><td>DPI 用 <code>-sv_lib</code> 后，改 C 代码无需重编 simv</td><td>选项不一致（timescale / define / 语言模式）时报错信息晦涩，排查成本高</td></tr>
+<tr><td>与<a href="#2">增量编译</a>、<a href="#3">partcomp</a>、<a href="#1"><code>-j</code></a> 完全正交，可叠加</td><td>小项目收益有限，不值得为此改造流程</td></tr>
+<tr><td>语义完全一致，<strong>零仿真结果风险</strong></td><td>库损坏/陈旧时会出现「源码已改但行为没变」的幽灵问题</td></tr>
+</table>
+<div class="bad">
+<p><strong>预编译最隐蔽的坑</strong>：某人改了已冻结库里的代码，但没重建预编译库，于是<strong>所有人跑的还是旧逻辑</strong>，而源码看起来是新的。防范办法只有两条——① 公共库目录设为只读，变更只能走 CI；② 库里放一份记录了源码 git commit 的 stamp 文件，编译脚本比对不一致就报错。</p>
+</div>
+
+<h2 id="5">5. 调试开关的代价</h2>
+<h3 id="5-1">5.1 原理：为什么 debug_access 这么贵</h3>
+<p>VCS 默认会做大量优化：合并信号、消除中间变量、把 <code>always</code> 块编译成紧凑的本地代码。一旦打开 <code>-debug_access+all</code>，为了让你能在任意时刻读写任意信号、强制赋值、回溯驱动源，VCS 必须：</p>
+<ul>
+<li>保留所有中间信号与局部变量，禁止信号合并与常量传播；</li>
+<li>为每个信号生成通用的读写访问接口（value change callback 挂钩）；</li>
+<li>保留完整的层次化符号表与行号映射。</li>
+</ul>
+<p>结果是<strong>编译变慢、可执行文件变大、运行速度明显下降</strong>。这是最常见也最容易修正的性能浪费。</p>
+<h3 id="5-2">5.2 分级使用 Demo</h3>
+<pre><code># ---- 回归（不需要交互调试，只要能 dump 波形）----
+vcs -full64 -sverilog -j8 -debug_access+pp \
+    -f filelist.f -top tb_top -o simv
+#   +pp = post-process only：允许 dump FSDB 做事后分析，
+#         但不支持交互式 force / 断点，性能损失小得多
+
+# ---- 需要极致性能的长回归（完全不要调试能力）----
+vcs -full64 -sverilog -j8 \
+    -f filelist.f -top tb_top -o simv
+#   连 -debug_access 都不加，FSDB 也不 dump，只看 log 与 coverage
+
+# ---- 本地 debug 单个 case（才用 all）----
+vcs -full64 -sverilog -j8 -debug_access+all+reverse \
+    -kdb -lca -f filelist.f -top tb_top -o simv_dbg
+#   -kdb 生成 Verdi 知识库，+reverse 支持反向调试</code></pre>
+<div class="good">
+<p><strong>最推荐的工程做法</strong>：Makefile 里做成两个 target —— <code>make regr</code> 用无 debug 或 <code>+pp</code>，<code>make debug</code> 用 <code>+all+reverse -kdb</code>，输出成两个不同的 <code>simv</code>。失败的 case 用 debug 版本带同一个 seed 重跑复现，而不是让所有 case 都背着调试开销跑。</p>
+</div>
+<h3 id="5-3">5.3 各档位对比</h3>
+<table>
+<tr><th>档位</th><th>能做什么</th><th>相对性能</th><th>适用场景</th></tr>
+<tr><td>不加任何 debug 选项</td><td>只有 <code>$display</code> / log / coverage</td><td>基准 1.0x（最快）</td><td>大规模夜间回归、覆盖率收集</td></tr>
+<tr><td><code>-debug_access+pp</code></td><td>可 dump FSDB 事后看波形</td><td>约 0.8~0.9x</td><td>需要失败波形的常规回归</td></tr>
+<tr><td><code>-debug_access+r</code> / <code>+w</code></td><td>按需开读 / 写访问</td><td>约 0.6~0.8x</td><td>只需局部 force 的场景</td></tr>
+<tr><td><code>-debug_access+all</code></td><td>全信号读写、force、交互调试</td><td>约 0.3~0.6x</td><td>本地单 case 调试</td></tr>
+<tr><td><code>+all+reverse -kdb -lca</code></td><td>再加反向调试 / Verdi 全功能</td><td>约 0.2~0.4x</td><td>难复现 bug 的深度调试</td></tr>
+</table>
+<div class="warn">
+<p>上表的倍数是量级参考，实际值与设计规模、活动密度强相关。<strong>务必在自己的工程上实测一次</strong>：用同一个 case、同一个 seed，分别用两档编译跑 CPU time 对比，这个数据是后续说服团队改流程的依据。</p>
+</div>
+
+<div class="part" id="P2">
+<div class="pn">第 二 部 分</div>
+<h2>运行加速（单核）</h2>
+<p class="pd">单核优化的本质只有一句话：<strong>让仿真器少做无用功</strong>。绝大多数回归的时间不是花在算 DUT 逻辑，而是花在写波形、格式化字符串、采样覆盖率这些「为了调试方便」的附加工作上。</p>
+</div>
+
+<h2 id="6">6. 波形 dump 策略</h2>
+<h3 id="6-1">6.1 原理</h3>
+<p>dump 的代价来自两处：<strong>每个被 dump 信号上挂的 value-change callback</strong>（每次翻转都要回调、编码、写缓冲），以及 <strong>磁盘 I/O</strong>。信号数 × 翻转率 共同决定开销，所以全层次全时间 dump 是最昂贵的做法。</p>
+<h3 id="6-2">6.2 操作 Demo</h3>
+<pre><code>// ---- 反面教材：全程全层次，最慢 ----
+initial begin
+    $fsdbDumpfile("wave.fsdb");
+    $fsdbDumpvars(0, tb_top);      // 深度 0 = 无限深，整个 TB 全 dump
+    $fsdbDumpMDA();                // 所有多维数组/memory 也 dump
+end
+
+// ---- 推荐：限层次 + 限范围 + 可控开关 ----
+initial begin
+    if ($test$plusargs("DUMP_FSDB")) begin
+        $fsdbDumpfile("wave.fsdb");
+        // 只 dump DUT 的 3 层，不碰 TB（TB 对象多、变化频繁）
+        $fsdbDumpvars(3, tb_top.u_dut);
+        $fsdbDumpon;
+    end
+end
+
+// ---- 按时间窗 dump：只抓故障区间 ----
+initial begin
+    if ($value$plusargs("DUMP_START=%d", t_start)) begin
+        $fsdbDumpfile("wave.fsdb");
+        $fsdbDumpvars(0, tb_top.u_dut);
+        $fsdbDumpoff;                 // 先关
+        #(t_start) $fsdbDumpon;       // 到点再开
+        #(t_win)   $fsdbDumpoff;      // 窗口结束立刻关
+    end
+end</code></pre>
+<p>运行时的配合用法：</p>
+<pre><code># 回归：完全不 dump
+./simv +UVM_TESTNAME=my_test +ntb_random_seed=1234
+
+# 失败后用同一 seed 重跑并只抓关键窗口
+./simv +UVM_TESTNAME=my_test +ntb_random_seed=1234 \
+       +DUMP_FSDB +DUMP_START=1000000
+
+# 限制 FSDB 体积与压缩行为
+./simv +fsdb+autoflush=off       \  # 关掉实时 flush，批量写盘
+       +fsdbfile+wave.fsdb</code></pre>
+<h3 id="6-3">6.3 几个关键取舍</h3>
+<table>
+<tr><th>做法</th><th>效果</th><th>代价 / 风险</th></tr>
+<tr><td>限制层次深度 <code>$fsdbDumpvars(3, dut)</code></td><td>信号数锐减，常省 50%+ dump 开销</td><td>深层信号没波形，debug 时可能要重跑</td></tr>
+<tr><td>不 dump TB（只 dump DUT）</td><td>避开 UVM 对象 / 动态数组的高频变化</td><td>TB 侧问题看不到，需靠 log 定位</td></tr>
+<tr><td>时间窗 dump</td><td>长 case 上收益最大（如只抓最后 1 ms）</td><td>必须先知道故障大致时刻，一般靠二次重跑</td></tr>
+<tr><td>不 dump memory / MDA</td><td>大 memory 的 dump 开销极高，关掉收益显著</td><td>需要看 memory 内容时得改用 backdoor 打印</td></tr>
+<tr><td>FSDB 替代 VCD / VPD</td><td>FSDB 体积小、写入快、Verdi 原生支持</td><td>需要 Verdi / novas 库 license</td></tr>
+<tr><td>关 autoflush</td><td>减少频繁小 I/O</td><td>仿真崩溃时末尾波形可能丢失</td></tr>
+</table>
+<div class="good">
+<p><strong>工程上最省事且有效的组合</strong>：回归默认不 dump；CI 跑 <code>+DUMP_FSDB</code> 只对 smoke 用例开；失败 case 自动用相同 seed 重跑一次带 dump 的版本。这样既保证可调试性，又不让 99% 成功的 case 背 dump 开销。</p>
+</div>
+
+<h2 id="7">7. UVM 打印与 verbosity</h2>
+<h3 id="7-1">7.1 原理：为什么打印这么贵</h3>
+<p><code>uvm_info</code> 的开销并不只是写文件。一条语句的完整代价是：</p>
+<div class="diagram">`uvm_info("TAG", $sformatf("addr=%0h data=%0h", addr, data), UVM_HIGH)
+    ↓
+ ① $sformatf 字符串格式化    ← 即使最终不打印，参数也已经被求值和格式化！
+ ② 构造 uvm_report_message 对象（动态内存分配）
+ ③ 查 verbosity 表决定是否输出
+ ④ 格式化成最终行（加时间戳、层次名）
+ ⑤ 写 stdout / log 文件（I/O）</div>
+<div class="bad">
+<p><strong>核心陷阱</strong>：<code>`uvm_info</code> 宏虽然会先检查 verbosity，但<strong>写成 <code>`uvm_info("T", $sformatf(...), UVM_HIGH)</code> 时，<code>$sformatf</code> 是作为实参在宏展开前就被求值的</strong>（取决于宏实现与调用方式）。在数据通路上每拍打一条的场景里，这部分格式化开销可能占到整个仿真的 10~20%。</p>
+</div>
+<h3 id="7-2">7.2 操作 Demo</h3>
+<pre><code>// ---- 反面：热点路径上无保护的格式化 ----
+always @(posedge clk) begin
+    `uvm_info("MON", $sformatf("beat %0d: data=%0h", cnt, data), UVM_HIGH)
+end
+
+// ---- 正面 1：用 uvm_report_enabled 先挡住 ----
+always @(posedge clk) begin
+    if (uvm_report_enabled(UVM_HIGH, UVM_INFO, "MON"))
+        `uvm_info("MON", $sformatf("beat %0d: data=%0h", cnt, data), UVM_HIGH)
+end
+
+// ---- 正面 2：高频监控点直接降级或删除 ----
+//   每个 transaction 打一条（而不是每拍打一条）
+function void write(my_item it);
+    `uvm_info("MON", it.convert2string(), UVM_MEDIUM)   // 频率低得多
+endfunction</code></pre>
+<pre><code># ---- 运行时控制 ----
+# 回归：最低 verbosity
+./simv +UVM_TESTNAME=my_test +UVM_VERBOSITY=UVM_LOW
+
+# 极致性能：连 UVM_LOW 也不要（只留 warning/error）
+./simv +UVM_TESTNAME=my_test +UVM_VERBOSITY=UVM_NONE
+
+# 只对某个组件开高 verbosity（debug 时精准放大）
+./simv +UVM_TESTNAME=my_test +UVM_VERBOSITY=UVM_LOW \
+       +uvm_set_verbosity=uvm_test_top.env.agt.mon,_ALL_,UVM_DEBUG,time,0</code></pre>
+<div class="warn">
+<p>另一个容易忽略的点：<strong>log 文件写到 NFS 网络盘上会极慢</strong>。把 log 先写本地 <code>/tmp</code> 或节点本地盘，跑完再拷回，对大 log 的 case 有时能快 20%+。同理，<code>+UVM_VERBOSITY=UVM_DEBUG</code> 跑长 case 会产出几 GB 的 log，本身就是瓶颈。</p>
+</div>
+<h3 id="7-3">7.3 优缺点</h3>
+<table>
+<tr><th>优点</th><th>缺点 / 代价</th></tr>
+<tr><td>零 license、零风险，纯改代码/选项</td><td>降 verbosity 后失败现场信息变少，debug 要重跑</td></tr>
+<tr><td>对 UVM 环境收益稳定（常 10~25%）</td><td>加 <code>uvm_report_enabled</code> 保护会让代码变啰嗦</td></tr>
+<tr><td>改 plusarg 即可，不需重新编译</td><td>团队习惯难改，容易有人偷偷加回高频打印</td></tr>
+</table>
+
+<h2 id="8">8. 覆盖率与断言开销</h2>
+<h3 id="8-1">8.1 原理</h3>
+<p>覆盖率的开销按类型差别极大：</p>
+<table>
+<tr><th>类型</th><th>选项</th><th>开销</th><th>说明</th></tr>
+<tr><td>Line / Branch</td><td><code>-cm line+branch</code></td><td>低</td><td>只在语句执行时置位，代价小</td></tr>
+<tr><td>Condition</td><td><code>-cm cond</code></td><td>中</td><td>每个条件表达式都要记录各子项取值</td></tr>
+<tr><td>FSM</td><td><code>-cm fsm</code></td><td>中</td><td>需识别状态机并跟踪跳转</td></tr>
+<tr><td>Toggle</td><td><code>-cm tgl</code></td><td><strong>高</strong></td><td>每个信号每次翻转都要记录，接近 dump 的开销</td></tr>
+<tr><td>Assertion / Cover</td><td><code>-cm assert</code>、SVA cover</td><td><strong>高</strong></td><td>每个断言每拍都要推进状态机</td></tr>
+<tr><td>Functional (covergroup)</td><td>代码里的 covergroup</td><td>中~高</td><td><code>sample()</code> 调用频率决定，高频 sample 很贵</td></tr>
+</table>
+<h3 id="8-2">8.2 操作 Demo</h3>
+<pre><code># ---- 功能回归：完全不开覆盖率 ----
+vcs -full64 -sverilog -j8 -f filelist.f -top tb_top -o simv_func
+
+# ---- 覆盖率回归：开，但限定范围 ----
+#   cm_hier.cfg 内容：
+#     +tree tb_top.u_dut          // 只统计 DUT
+#     -tree tb_top.u_dut.u_ddr    // 排除第三方 IP
+#     -tree tb_top.env            // 排除 TB
+vcs -full64 -sverilog -j8 \
+    -cm line+cond+fsm+branch \
+    -cm_hier cm_hier.cfg \
+    -cm_dir ./cov_db \
+    -f filelist.f -top tb_top -o simv_cov
+
+# ---- toggle 单独一轮跑（因为最贵）----
+vcs ... -cm tgl -cm_hier tgl_only.cfg -o simv_tgl
+
+# ---- 运行时也要指定 ----
+./simv_cov -cm line+cond+fsm+branch -cm_name test_${SEED} -cm_dir ./cov_db</code></pre>
+<pre><code>// ---- 断言运行时控制 ----
+initial begin
+    if ($test$plusargs("NO_SVA")) begin
+        $assertoff(0, tb_top.u_dut);      // 关掉整个 DUT 的断言
+    end
+end</code></pre>
+<pre><code># 编译时关 cover property（保留 assert property）
+vcs ... -assert disable_cover
+
+# 运行时限制断言失败次数，避免刷屏拖慢
+./simv -assert finish_maxfail=10</code></pre>
+<h3 id="8-3">8.3 优缺点</h3>
+<table>
+<tr><th>做法</th><th>优点</th><th>缺点</th></tr>
+<tr><td>功能回归不开 coverage</td><td>省 5~20%，最直接</td><td>需要额外安排覆盖率回归轮次，流程变复杂</td></tr>
+<tr><td><code>-cm_hier</code> 限定范围</td><td>排除 TB 与第三方 IP，既省时又让覆盖率数据更有意义</td><td>配置文件要维护，漏配会导致覆盖率统计口径变化</td></tr>
+<tr><td>toggle 单独一轮</td><td>避免最贵的项拖慢所有 case</td><td>多一轮回归，管理成本上升</td></tr>
+<tr><td><code>-assert disable_cover</code></td><td>保留检查能力，去掉 cover 统计开销</td><td>断言覆盖率缺失，签核时要补跑</td></tr>
+<tr><td><code>$assertoff</code></td><td>运行时灵活，无需重编</td><td>关掉后失去检查能力，<strong>绝不能用在签核回归</strong></td></tr>
+</table>
+
+<h2 id="9">9. 时序检查与门级优化</h2>
+<h3 id="9-1">9.1 原理</h3>
+<p>门级（netlist）仿真的时间几乎都消耗在三件事：<strong>SDF 反标后的延迟事件调度</strong>、<strong><code>specify</code> 块里的 setup/hold/width 时序检查</strong>、以及<strong>海量小单元带来的事件密度</strong>。RTL 仿真里这些开销不存在，所以这一节的选项只对门级有意义。</p>
+<h3 id="9-2">9.2 操作 Demo</h3>
+<pre><code># ---- 门级功能验证（不关心时序，只验连接与功能）----
+vcs -full64 +nospecify +notimingcheck \
+    +delay_mode_zero \
+    -f netlist.f -top tb_top -o simv_zero
+#   +nospecify      : 忽略 specify 块（路径延迟 + 时序检查一起关）
+#   +notimingcheck  : 只关时序检查，保留路径延迟
+#   +delay_mode_zero: 所有延迟当 0，等价于 RTL 速度
+
+# ---- 门级时序验证（必须反标，但做裁剪）----
+vcs -full64 -sdf max:tb_top.u_dut:dut.sdf \
+    +neg_tchk \
+    +sdfverbose \
+    -f netlist.f -top tb_top -o simv_sdf
+
+# ---- 只反标关键模块，其余用单位延迟 ----
+#   在 SDF 命令文件里限定 scope，或分模块 -sdf 多次指定</code></pre>
+<div class="note">
+<p>四个 delay mode 的关系：<code>+delay_mode_zero</code>（全 0，最快）→ <code>+delay_mode_unit</code>（全部 1 个时间单位）→ <code>+delay_mode_path</code>（只用 specify 路径延迟）→ <code>+delay_mode_distributed</code>（用分布延迟）。越往右越真实也越慢。</p>
+</div>
+<h3 id="9-3">9.3 优缺点</h3>
+<table>
+<tr><th>选项</th><th>优点</th><th>缺点 / 风险</th></tr>
+<tr><td><code>+notimingcheck</code></td><td>门级常提速 2~5x</td><td><strong>不再报 setup/hold violation</strong>，时序问题完全漏掉</td></tr>
+<tr><td><code>+nospecify</code></td><td>比 notimingcheck 更快（连路径延迟计算也省）</td><td>路径延迟消失，时序行为与真实硅片差异大</td></tr>
+<tr><td><code>+delay_mode_zero</code></td><td>接近 RTL 速度</td><td>完全失去时序意义，只能做连接性/功能检查</td></tr>
+<tr><td>局部 SDF 反标</td><td>在精度与速度间折中</td><td>未反标部分的时序问题会漏掉，范围要有依据</td></tr>
+</table>
+<div class="bad">
+<p><strong>绝对不能搞混的一点</strong>：这些选项用于<strong>加速门级功能验证</strong>，不能替代 STA。但反过来，如果你的门级回归目的就是验时序（比如验异步复位 recovery、验 SDF 反标正确性），那么关掉 timing check 就等于这轮回归白跑。<strong>先明确这一轮门级跑的是「功能」还是「时序」，再决定开关。</strong></p>
+</div>
+
+<h2 id="10">10. +rad 与两态仿真</h2>
+<h3 id="10-1">10.1 Radiant 优化 +rad</h3>
+<p>VCS 的 Radiant Technology 是一组更激进的编译期优化：更强的表达式合并、调度优化、本地化变量等。对 RTL 与门级都有效。</p>
+<pre><code># 编译时打开（需要 Radiant license）
+vcs -full64 -sverilog -j8 +rad \
+    -f filelist.f -top tb_top -o simv
+
+# 可配合 radiant 配置文件做细粒度控制
+vcs ... +rad +optconfigfile+rad.cfg</code></pre>
+<table>
+<tr><th>优点</th><th>缺点 / 代价</th></tr>
+<tr><td>典型提速 1.3~2x，部分门级场景更高</td><td>需要<strong>单独的 Radiant license</strong></td></tr>
+<tr><td>只需加一个编译选项，不改代码</td><td>编译时间增加（优化本身要花时间）</td></tr>
+<tr><td>不改变仿真语义（标准情况下结果一致）</td><td>与 <code>-debug_access+all</code> 冲突：调试开关会抵消大部分优化</td></tr>
+<tr><td>可与 <code>-j</code>、FGP 叠加</td><td>极少数情况下会暴露出代码里本就存在的竞争问题</td></tr>
+</table>
+<h3 id="10-2">10.2 两态仿真</h3>
+<p>标准 Verilog 是四态的（0/1/X/Z）。两态仿真把 X/Z 全部当作 0/1 处理，省掉每个信号额外的一位编码与 X 传播逻辑。</p>
+<pre><code># 两态仿真（选项名随版本略有差异，以本地 vcs -help 为准）
+vcs -full64 -sverilog +twostate -f filelist.f -top tb_top -o simv_2s
+
+# 配合 X-prop 分析：先用四态 + xprop 跑完 X 检查，确认干净后再上两态
+vcs -full64 -sverilog -xprop=tmerge -f filelist.f -o simv_xprop</code></pre>
+<div class="bad">
+<p><strong>两态仿真的核心风险</strong>：复位前的未初始化状态、多驱动冲突、总线浮空，这些本应表现为 X 的问题会被「假装」成确定值，<strong>bug 被掩盖而不是被发现</strong>。只有在已经用四态 + X-prop 充分验证过复位与初始化之后，才能在后续的大规模性能回归里用两态。绝不能作为默认模式。</p>
+</div>
+<table>
+<tr><th>优点</th><th>缺点 / 代价</th></tr>
+<tr><td>典型提速 1.2~2x，内存占用也降低</td><td>X 传播能力丧失，复位 / 初始化 bug 会被掩盖</td></tr>
+<tr><td>对 X 敏感度低的成熟模块很划算</td><td>与四态仿真结果可能不一致，需要单独做一致性确认</td></tr>
+<tr><td>可与其它运行期优化叠加</td><td>部分 IP / VIP 模型假设四态语义，可能直接行为异常</td></tr>
+</table>
+
+<h2 id="11">11. TB 代码级优化</h2>
+<h3 id="11-1">11.1 几类典型的 TB 瓶颈</h3>
+<table>
+<tr><th>瓶颈</th><th>表现</th><th>优化手段</th></tr>
+<tr><td>约束求解（constraint solving）</td><td>profiler 里 solver 占比高；大数组 / 复杂关系约束</td><td>拆分 randomize 粒度、用 <code>std::randomize</code> 局部随机、避免大 <code>foreach</code> 约束、减少 <code>solve...before</code></td></tr>
+<tr><td>轮询式等待</td><td><code>forever #1 if(sig) ...</code> 这类代码产生海量无用事件</td><td>改成事件驱动：<code>@(posedge sig)</code> / <code>wait(cond)</code></td></tr>
+<tr><td>对象频繁 new</td><td>GC 压力大，内存抖动</td><td>复用 transaction 对象，用对象池；避免每拍 new</td></tr>
+<tr><td>DPI / C 模型调用</td><td>每次调用有上下文切换与数据拷贝成本</td><td>降低调用频率（批量传数据）、避免传大数组按值拷贝</td></tr>
+<tr><td>Scoreboard 查找</td><td>线性遍历队列，O(n²) 行为</td><td>改用关联数组按 key 索引</td></tr>
+<tr><td>无意义的长延时</td><td><code>#10000</code> 空等、复位等待过长</td><td>改为事件握手；复位时间缩短到满足协议的最小值</td></tr>
+</table>
+<h3 id="11-2">11.2 操作 Demo</h3>
+<pre><code>// ---- 反面：轮询，每个时间单位都醒一次 ----
+forever begin
+    #1;
+    if (vif.valid &amp;&amp; vif.ready) collect_item();
+end
+
+// ---- 正面：事件驱动，只在真正发生时醒 ----
+forever begin
+    @(posedge vif.clk iff (vif.valid &amp;&amp; vif.ready));
+    collect_item();
+end</code></pre>
+<pre><code>// ---- 反面：一次随机化整个大对象 ----
+class big_item;
+    rand bit [31:0] data[1024];
+    constraint c { foreach (data[i]) data[i] inside {[0:1000]}; }  // solver 压力极大
+endclass
+
+// ---- 正面：只对需要随机的字段做局部随机 ----
+foreach (data[i])
+    void'(std::randomize(data[i]) with { data[i] inside {[0:1000]}; });
+// 更好：如果不需要约束，直接用 $urandom_range
+foreach (data[i]) data[i] = $urandom_range(0, 1000);</code></pre>
+<pre><code>// ---- Scoreboard：线性查找 → 关联数组 ----
+// 反面
+foreach (exp_q[i]) if (exp_q[i].addr == act.addr) begin ... end
+// 正面
+if (exp_map.exists(act.addr)) begin ... end</code></pre>
+<h3 id="11-3">11.3 优缺点</h3>
+<table>
+<tr><th>优点</th><th>缺点 / 代价</th></tr>
+<tr><td>零 license、零风险，收益可以非常大（TB 瓶颈时 2x+）</td><td>需要人工分析与改代码，见效不如加选项快</td></tr>
+<tr><td>改完是永久收益，对所有 case 生效</td><td>改随机化逻辑可能改变激励分布，<strong>需重新确认覆盖率</strong></td></tr>
+<tr><td>顺带提升代码质量与可维护性</td><td>老环境改动有回归风险，要逐步做并对比结果</td></tr>
+</table>
+<div class="warn">
+<p>把 <code>randomize()</code> 改写成 <code>$urandom_range</code> 之前，务必确认<strong>随机分布与约束语义没有改变</strong>。性能优化改掉了激励分布却没人发现，是很典型的「跑得快但验得少」。</p>
+</div>
+
+<h2 id="12">12. Save / Restore</h2>
+<h3 id="12-1">12.1 原理</h3>
+<p>SoC 级仿真常有一段冗长且<strong>每个 case 都完全相同</strong>的开头：上电、PLL 锁定、DDR 初始化训练、bootrom 加载、OS 启动……这段可能占几十分钟。Save/Restore 的思路是：<strong>跑一次，把仿真器的完整状态存成快照，后续所有 case 从快照继续跑</strong>。</p>
+<div class="diagram">传统：  case1: [ boot 30min ][ test 2min ]
+        case2: [ boot 30min ][ test 2min ]
+        case3: [ boot 30min ][ test 2min ]     总计 96 min
+
+S/R：   一次:  [ boot 30min ]→ save snapshot
+        case1: restore + [ test 2min ]
+        case2: restore + [ test 2min ]
+        case3: restore + [ test 2min ]         总计 36 min</div>
+<h3 id="12-2">12.2 操作 Demo</h3>
+<pre><code># ---- 方式一：UCLI 交互/脚本保存 ----
+# save.ucli 内容：
+#   run 500us           ;# 跑到 boot 完成的时刻
+#   save boot.snapshot  ;# 存快照
+#   quit
+./simv -ucli -i save.ucli
+
+# ---- 后续 case 从快照恢复 ----
+./simv -r boot.snapshot +UVM_TESTNAME=test_a
+./simv -r boot.snapshot +UVM_TESTNAME=test_b
+
+# ---- 方式二：命令行直接指定 ----
+./simv -save boot.snapshot +boot_only      # 跑到某点自动 save
+./simv -restore boot.snapshot +UVM_TESTNAME=test_a</code></pre>
+<pre><code>// ---- 更轻量的替代：backdoor 加载，跳过 boot 过程 ----
+// 不走真实 flash/DDR 训练流程，直接把 image 写进 memory 模型
+initial begin
+    if ($test$plusargs("FAST_BOOT")) begin
+        $readmemh("boot_image.hex", tb_top.u_dut.u_sram.mem);
+        force tb_top.u_dut.u_cpu.boot_done = 1'b1;
+        force tb_top.u_dut.u_pll.locked    = 1'b1;
+        #1us;
+        release tb_top.u_dut.u_cpu.boot_done;
+    end
+end</code></pre>
+<h3 id="12-3">12.3 优缺点</h3>
+<table>
+<tr><th>手段</th><th>优点</th><th>缺点 / 风险</th></tr>
+<tr><td>Save / Restore</td><td>SoC 级收益巨大（常 2~5x 墙钟）；完全保真，状态与真实跑一致</td><td>快照文件大（几 GB）；设计/TB 一改就得重建快照；含 DPI/C 模型或打开文件句柄时 restore 可能失败</td></tr>
+<tr><td>Backdoor 加载</td><td>无快照管理成本，灵活；可跳过任意慢流程</td><td><strong>跳过的流程本身就不再被验证</strong>；force/release 使用不当会造成状态不一致</td></tr>
+<tr><td>缩短复位 / 等待时间</td><td>最简单，无副作用</td><td>可能违反协议规定的最小复位时长，掩盖真实上电问题</td></tr>
+</table>
+<div class="warn">
+<p>无论用哪种，<strong>必须保留至少一个「完整 boot」的回归用例</strong>定期跑，否则 boot 流程本身的 bug 永远不会被发现。这是用加速换验证完整性时最容易踩的坑。</p>
+</div>
+
+<div class="part" id="P3">
+<div class="pn">第 三 部 分</div>
+<h2>多核加速</h2>
+<p class="pd">前两部分都是「少做无用功」，这一部分是「同样的工作用更多核去做」。核心是分清三类并行：编译并行（<code>-j</code>）、应用级并行（ALP，卸载 dump/覆盖率）、细粒度并行（FGP，切分仿真内核本身）。三者作用层次完全不同，收益条件也完全不同。</p>
+</div>
+
+<h2 id="13">13. 三类并行的区别</h2>
+<div class="diagram">                         ┌──────────────── 一次 VCS 使用 ────────────────┐
+                         │                                               │
+        ┌── 编译 ────────┴─────────────┐   ┌──────── 运行 ───────────────┴──┐
+        │                              │   │                                │
+   -j / partcomp                       │   │   仿真内核（事件调度 + 求值）   │
+   并行 gcc / 并行 elaborate           │   │        ↑ FGP 切这里             │
+   【只缩短 compile 时间】             │   │                                │
+                                       │   │   波形 dump / 覆盖率 / SVA     │
+                                       │   │        ↑ ALP 卸载这些          │
+                                       └───┴────────────────────────────────┘</div>
+<table>
+<tr><th>类别</th><th>选项</th><th>并行什么</th><th>加速对象</th><th>语义风险</th><th>license</th></tr>
+<tr><td>编译并行</td><td><code>-j</code>、<code>-fastpartcomp</code></td><td>gcc 进程 / elaboration 分区</td><td>只有编译时间</td><td>无</td><td>不需要</td></tr>
+<tr><td>应用级并行 ALP</td><td><code>-parallel+...</code></td><td>dump / coverage / SVA 等辅助任务</td><td>运行时间（辅助任务占比高时）</td><td>低（不改内核调度）</td><td>需要多核 license</td></tr>
+<tr><td>细粒度并行 FGP</td><td><code>-fgp</code></td><td>仿真内核的事件求值</td><td>运行时间（设计事件密集时）</td><td><strong>中（调度顺序可能变）</strong></td><td>需要多核 license</td></tr>
+<tr><td>多机回归</td><td>LSF / SGE</td><td>整个回归的 case 分发</td><td>回归总墙钟（吞吐）</td><td>无</td><td>只需足够 sim license</td></tr>
+</table>
+<div class="note">
+<p><strong>前三类正交，可以同时用</strong>：<code>vcs -j8 -fgp ... -parallel+dump</code> 是合法组合。但注意 FGP 和 ALP 都会消耗多核 license，同时开要算清总线程数与 license 数是否够。</p>
+</div>
+
+<h2 id="14">14. FGP 细粒度并行</h2>
+<h3 id="14-1">14.1 原理</h3>
+<p>传统仿真是单线程的：事件队列里的事件一个一个取出来求值。FGP（Fine-Grained Parallelism）把<strong>同一个时间片内彼此独立的事件</strong>分发到多个线程并行求值，线程之间在每个时间片边界同步。</p>
+<div class="diagram">单线程：  时间 t: [ e1 ][ e2 ][ e3 ][ e4 ][ e5 ][ e6 ] ──→ 时间 t+1
+                  └──────── 串行执行 6 个事件 ────────┘
+
+FGP(4): 时间 t: T0:[ e1 ][ e5 ]
+                T1:[ e2 ][ e6 ]      ← 并行求值
+                T2:[ e3 ]
+                T3:[ e4 ]
+                   └── barrier 同步 ──┘ ──→ 时间 t+1</div>
+<p>关键推论：<strong>加速比取决于「每个时间片内有多少可并行的独立工作量」</strong>。如果每个时间片只有寥寥几个事件（小设计、TB 主导），线程同步的开销会超过并行收益，甚至变慢。</p>
+<h3 id="14-2">14.2 两种工作模式</h3>
+<table>
+<tr><th>模式</th><th>选项</th><th>说明</th></tr>
+<tr><td>单步（默认）</td><td><code>-fgp</code></td><td>elaboration 与 FGP 代码生成一起做，流程简单</td></tr>
+<tr><td>多步</td><td><code>-fgp=multi_steps</code></td><td>把 elaborate 与 FGP codegen 分离成两步，对超大设计更稳、内存峰值更低</td></tr>
+</table>
+<h3 id="14-3">14.3 操作 Demo</h3>
+<pre><code># ---- Step 1：编译时打开 FGP ----
+vcs -full64 -sverilog -j8 \
+    -fgp \
+    -f netlist.f -top tb_top -o simv_fgp
+
+# 超大设计用多步模式
+vcs -full64 -sverilog -j8 \
+    -fgp=multi_steps \
+    -f netlist.f -top tb_top -o simv_fgp
+
+# ---- Step 2：运行时指定线程数 ----
+./simv_fgp -fgp=num_threads:4 +UVM_TESTNAME=my_test
+
+# 也可在编译时就固定线程数
+vcs ... -fgp=num_threads:4 -o simv_fgp
+./simv_fgp +UVM_TESTNAME=my_test
+
+# ---- Step 3：LSF 上必须申请匹配的核数 ----
+bsub -n 4 -R "span[hosts=1]" \
+     ./simv_fgp -fgp=num_threads:4 +UVM_TESTNAME=my_test
+#   span[hosts=1] 很关键：FGP 的线程必须在同一台机器上（共享内存）</code></pre>
+<div class="warn">
+<p><code>-fgp</code> 的子选项拼写与可用组合<strong>随 VCS 版本有差异</strong>（例如某些版本支持 <code>num_threads:N,M</code> 的第二个数指定辅助线程）。上线前务必用本地版本确认：</p>
+<pre><code>vcs -help | grep -i fgp
+# 或查对应版本的 VCS User Guide "Multicore Simulation" 章节</code></pre>
+</div>
+<h3 id="14-4">14.4 线程数怎么选</h3>
+<pre><code># 做一次扫描实验：同一 case、同一 seed，只变线程数
+for N in 1 2 4 8; do
+    /usr/bin/time -v ./simv_fgp -fgp=num_threads:$N \
+        +UVM_TESTNAME=my_test +ntb_random_seed=1234 \
+        -l run_n${N}.log 2&gt; time_n${N}.log
+done
+# 对比各 N 的 CPU time / wall time，找拐点</code></pre>
+<p>典型结果形态：</p>
+<table>
+<tr><th>线程数</th><th>墙钟时间（示意）</th><th>说明</th></tr>
+<tr><td>1</td><td>100 min</td><td>基准</td></tr>
+<tr><td>2</td><td>60 min（1.7x）</td><td>收益接近线性</td></tr>
+<tr><td>4</td><td>38 min（2.6x）</td><td>仍有收益，但已有同步损耗</td></tr>
+<tr><td>8</td><td>35 min（2.9x）</td><td><strong>收益饱和</strong>，多花 4 份 license 只换 8%</td></tr>
+</table>
+<div class="good">
+<p>实践中 <strong>N = 2~4 是性价比最高的区间</strong>。license 是按线程数消耗的，8 线程换不到 2 倍收益时，不如把这些 license 拿去多跑 case（见 <a href="#16">§16</a> 吞吐优化）。</p>
+</div>
+<h3 id="14-5">14.5 适用与不适用</h3>
+<table>
+<tr><th>判定</th><th>场景</th><th>原因</th></tr>
+<tr><td>✅ 很适合</td><td>大规模门级 netlist + SDF 反标仿真（百万门以上）</td><td>事件密度极高，单个时间片内有大量独立单元可并行求值；常得 2~4x</td></tr>
+<tr><td>✅ 适合</td><td>全芯片多时钟域、高翻转活动的 RTL 回归</td><td>设计侧工作量大，并行度足够</td></tr>
+<tr><td>✅ 适合</td><td>大型 memory / 多核 CPU cluster 的长时间仿真</td><td>DUT 计算主导，TB 占比低</td></tr>
+<tr><td>⚠️ 收益有限</td><td>中小规模 RTL（单模块 / 子系统级）</td><td>每时间片事件少，同步开销占比高</td></tr>
+<tr><td>❌ 不适合</td><td>TB 主导的环境（重随机化、重 UVM 打印、重 scoreboard）</td><td>TB 是串行的类/线程语义，FGP 无法并行；此时应做 <a href="#11">§11</a> 的 TB 优化</td></tr>
+<tr><td>❌ 不适合</td><td>大量 PLI / 非线程安全的 DPI-C 模型</td><td>C 侧全局状态在多线程下不安全，可能崩溃或结果错乱</td></tr>
+<tr><td>❌ 冲突</td><td>同时开 <code>-debug_access+all</code> 和全量 dump</td><td>调试开销与 dump 成为新瓶颈，FGP 收益被抵消</td></tr>
+</table>
+<h3 id="14-6">14.6 一致性比对流程（必做）</h3>
+<div class="bad">
+<p><strong>FGP 最需要警惕的风险</strong>：并行求值可能改变<strong>同一时间片内事件的执行顺序</strong>。对于严格遵守 SystemVerilog 调度语义的代码，结果应当一致；但如果代码里本来就存在竞争（race）——比如用阻塞赋值跨模块通信、对同一变量在不同 always 块里读写、依赖 <code>#0</code> 的执行顺序——那么单核与 FGP 的结果可能不同。<strong>这不是 FGP 的 bug，而是 FGP 把你代码里本已存在的隐患暴露了出来。</strong></p>
+</div>
+<p>上线 FGP 之前必须做的比对：</p>
+<pre><code># 1. 同一 seed 跑单核与 FGP，比对 log
+./simv     +UVM_TESTNAME=my_test +ntb_random_seed=1234 -l base.log
+./simv_fgp -fgp=num_threads:4 \
+           +UVM_TESTNAME=my_test +ntb_random_seed=1234 -l fgp.log
+diff &lt;(grep -v "simulation time\|CPU Time" base.log) \
+     &lt;(grep -v "simulation time\|CPU Time" fgp.log)
+
+# 2. 比对波形（关键信号）
+#    两边都 dump 同样范围的 FSDB，用 Verdi 的 compare 或 fsdbreport 比
+fsdbreport -s base.fsdb -o base.txt  tb_top.u_dut.key_sig*
+fsdbreport -s fgp.fsdb  -o fgp.txt   tb_top.u_dut.key_sig*
+diff base.txt fgp.txt
+
+# 3. 比对覆盖率数据库（确认激励分布未变）
+urg -dir base_cov.vdb fgp_cov.vdb -report cmp_rpt
+
+# 4. 跑一轮完整回归，确认 pass/fail 结果集完全相同</code></pre>
+<div class="good">
+<p>比对发现差异时，<strong>正确动作是去查代码里的竞争</strong>（用 <code>vcs +race</code> 或 Verdi race 分析），而不是「因为不一致所以放弃 FGP」。修掉竞争对单核仿真的稳定性也是净收益。</p>
+</div>
+<h3 id="14-7">14.7 优缺点汇总</h3>
+<table>
+<tr><th>优点</th><th>缺点 / 代价</th></tr>
+<tr><td>唯一能让<strong>单个 case</strong> 变快的多核手段（其它都是吞吐优化）</td><td>需要多核 license，按线程数消耗，成本高</td></tr>
+<tr><td>门级 / 大规模 RTL 上常得 2~4x</td><td>小设计、TB 主导场景几乎无效甚至变慢</td></tr>
+<tr><td>不需要改设计代码，加选项即可</td><td><strong>事件调度顺序可能变化</strong>，必须做一致性比对</td></tr>
+<tr><td>对「单个超长 case 卡住整个回归」的问题是唯一解</td><td>线程必须同机（<code>span[hosts=1]</code>），对集群调度有要求</td></tr>
+<tr><td>可与 <code>+rad</code>、ALP、增量编译叠加</td><td>与部分 PLI / debug 选项不兼容；内存占用随线程增加</td></tr>
+</table>
+
+<h2 id="15">15. ALP 应用级并行</h2>
+<h3 id="15-1">15.1 原理</h3>
+<p>ALP（Application Level Parallelism）不动仿真内核，而是把<strong>内核之外的辅助工作</strong>搬到独立线程：波形写盘、toggle 覆盖率累加、SVA 评估等。仿真内核把数据丢进队列就继续往前跑，辅助线程异步消费。</p>
+<div class="diagram">单线程：  内核求值 → 写 FSDB → 内核求值 → 写 FSDB → ...
+                     ↑ 内核在这里被阻塞
+
+ALP：     内核求值 → 内核求值 → 内核求值 → ...    （主线程不停）
+              ↓ 入队    ↓ 入队    ↓ 入队
+          [ dump 线程 ] 异步写盘                  （另一个核）</div>
+<h3 id="15-2">15.2 操作 Demo</h3>
+<pre><code># dump 卸载到独立线程（最常用，对开 FSDB 的回归收益明显）
+vcs -full64 -sverilog -j8 -debug_access+pp \
+    -parallel+dump \
+    -f filelist.f -top tb_top -o simv_alp
+
+# 覆盖率收集并行
+vcs ... -parallel+coverage
+
+# 组合使用
+vcs ... -parallel+dump+coverage
+
+# 与 FGP 叠加（注意总线程数与 license）
+vcs ... -fgp -parallel+dump -o simv_both
+./simv_both -fgp=num_threads:4 ...</code></pre>
+<div class="warn">
+<p><code>-parallel</code> 的子选项名称与支持范围<strong>各版本差异较大</strong>（部分版本写作 <code>-parallel=dump</code> 或需配合 <code>+fsdb+parallel</code>）。务必用本地版本确认：</p>
+<pre><code>vcs -help | grep -i parallel</code></pre>
+</div>
+<h3 id="15-3">15.3 优缺点</h3>
+<table>
+<tr><th>优点</th><th>缺点 / 代价</th></tr>
+<tr><td>风险比 FGP 低得多：<strong>不改变内核事件调度，结果严格一致</strong></td><td>加速上限受限：最多只能把辅助任务的时间「隐藏掉」</td></tr>
+<tr><td>正好治「因为开了 FSDB / 覆盖率而变慢」这个最常见问题</td><td>如果本来就不 dump 不开覆盖率，完全无收益</td></tr>
+<tr><td>对 TB 主导的 UVM 环境也有效（dump 开销与设计规模无关）</td><td>仍需多核 license</td></tr>
+<tr><td>配置简单，无需一致性比对</td><td>辅助线程队列积压时仍会反压主线程（I/O 慢盘场景）</td></tr>
+</table>
+<div class="good">
+<p><strong>选择次序建议</strong>：先问「能不能干脆不 dump / 不开覆盖率」（<a href="#6">§6</a>、<a href="#8">§8</a>，零成本）→ 不行再用 ALP 把它并行掉（低风险）→ 内核本身才是瓶颈时才上 FGP（高成本高风险）。</p>
+</div>
+
+<h2 id="16">16. SmartCompile 与多机回归</h2>
+<h3 id="16-1">16.1 多机回归：吞吐 vs 延迟</h3>
+<p>必须区分两个目标：</p>
+<table>
+<tr><th>目标</th><th>含义</th><th>解法</th></tr>
+<tr><td><strong>延迟</strong>（latency）</td><td>单个 case 多快跑完</td><td>FGP、+rad、减少 dump、Save/Restore</td></tr>
+<tr><td><strong>吞吐</strong>（throughput）</td><td>5000 个 case 的回归多久全部跑完</td><td>LSF/SGE 多机并行分发，每 case 单核</td></tr>
+</table>
+<div class="note">
+<p>这是最重要的一个判断：<strong>如果回归总时间的瓶颈是 case 数量多，那么多机分发（吞吐）的性价比远高于 FGP（延迟）</strong>。同样的 license 预算，用来并发跑 100 个单核 case，通常比用来给 25 个 case 各开 4 线程更划算。FGP 的真正价值在于「单个 case 长到无法容忍」的情况，比如一个门级 case 要跑 20 小时。</p>
+</div>
+<h3 id="16-2">16.2 操作 Demo</h3>
+<pre><code># ---- 回归分发：每个 case 一个 job，单核 ----
+# regr.sh
+for seed in $(seq 1 200); do
+    bsub -n 1 -q normal -J "regr_${seed}" \
+         -o logs/run_${seed}.log \
+         "./simv +UVM_TESTNAME=rand_test +ntb_random_seed=${seed} \
+                 -cm_name run_${seed} -cm_dir ./cov_db"
+done
+
+# ---- 用 VCS 自带的回归管理（DVE/Verdi 环境）----
+# 或用 Synopsys VC Execution Manager / 自研脚本管理依赖与重跑
+
+# ---- 覆盖率合并 ----
+urg -full64 -dir ./cov_db/*.vdb -dbname merged.vdb -report urgReport</code></pre>
+<h3 id="16-3">16.3 其它值得知道的手段</h3>
+<table>
+<tr><th>手段</th><th>说明</th><th>适用 / 代价</th></tr>
+<tr><td><strong>抽象模型替换</strong></td><td>把 DDR PHY、SERDES、PLL、ADC 等慢模型换成行为级 / C 模型；flash boot 换 <code>$readmemh</code> backdoor</td><td>收益极大（有时 5x+），但被替换的部分不再被验证，需单独在 IP 级验收</td></tr>
+<tr><td><strong>硬件加速（emulation）</strong></td><td>ZeBu / Palladium 等，把设计映射到 FPGA/专用硬件</td><td>比软件仿真快 2~4 个数量级；但设备投入巨大、编译时间长（数小时）、调试能力受限、不适合频繁改动的 RTL</td></tr>
+<tr><td><strong>仿真器-硬件协同</strong></td><td>DUT 跑在 emulator，TB 跑在 VCS（co-simulation / SCE-MI）</td><td>兼顾 UVM 环境复用与硬件速度；接口带宽常成新瓶颈</td></tr>
+<tr><td><strong>本地盘 I/O</strong></td><td>log / FSDB / 覆盖率数据库写本地盘而非 NFS，跑完再拷回</td><td>零成本，对 I/O 密集 case 常有 10~20%；需脚本管理拷回与清理</td></tr>
+<tr><td><strong>内存与机型匹配</strong></td><td>避免 swap；选 CPU 主频高的机型（仿真是单线程主频敏感型负载）</td><td>零改动，调度策略层面的收益常被忽视</td></tr>
+</table>
+<div class="good">
+<p>最后一条特别值得强调：<strong>仿真内核是典型的单线程、主频敏感、cache 敏感负载</strong>。把 job 调度到主频 3.5 GHz 的机器而不是 2.2 GHz 的机器上，收益可能超过你折腾半天选项的总和。排查性能问题时先确认一下跑在什么机器上。</p>
+</div>
+
+<div class="part" id="P4">
+<div class="pn">第 四 部 分</div>
+<h2>汇总对比</h2>
+<p class="pd">把前面所有手段放到同一张表里横向比较，再给出按瓶颈选型的决策路径、分级回归的配置模板，以及最容易踩的坑。</p>
+</div>
+
+<h2 id="17">17. 全手段对比总表</h2>
+<p>「典型收益」是量级参考，强依赖设计规模与现状；「风险」指是否可能改变仿真结果或削弱验证能力。</p>
+<table>
+<tr><th>#</th><th>手段</th><th>作用阶段</th><th>典型收益</th><th>license</th><th>风险</th><th>实施成本</th></tr>
+<tr><td>1</td><td><a href="#1"><code>-j N</code> 并行编译</a></td><td>编译</td><td>编译 1.5~3x</td><td>无</td><td>无</td><td>极低</td></tr>
+<tr><td>2</td><td><a href="#2">增量编译（不 clean）</a></td><td>编译</td><td>编译 5~10x</td><td>无</td><td>无</td><td>极低</td></tr>
+<tr><td>3</td><td><a href="#3"><code>-fastpartcomp</code> 分区编译</a></td><td>编译</td><td>编译 1.5~2.5x（大设计）</td><td>无/视版本</td><td>低（运行略慢）</td><td>中</td></tr>
+<tr><td>4</td><td><a href="#4">三步流程 + 预编译库</a></td><td>编译</td><td>编译 1.2~2x；门级可更高</td><td>无</td><td>无</td><td>中</td></tr>
+<tr><td>4b</td><td><a href="#4-6">DPI 预编译 <code>.so</code> + <code>-sv_lib</code></a></td><td>编译</td><td>改 C 代码免重编 simv</td><td>无</td><td>无</td><td>低</td></tr>
+<tr><td>4c</td><td><a href="#4-7"><code>-Mlib</code> 共享编译缓存</a></td><td>编译</td><td>命中时编译 2~5x</td><td>无</td><td>低（版本须一致）</td><td>中</td></tr>
+<tr><td>5</td><td><a href="#5">去掉 <code>-debug_access+all</code></a></td><td>编译+运行</td><td><strong>运行 2~3x</strong></td><td>无</td><td>低（失去交互调试）</td><td>极低</td></tr>
+<tr><td>6</td><td><a href="#6">减少 / 限范围 dump</a></td><td>运行</td><td><strong>运行 1.5~3x</strong></td><td>无</td><td>低（需重跑取波形）</td><td>低</td></tr>
+<tr><td>7</td><td><a href="#7">降 verbosity / 删热点打印</a></td><td>运行</td><td>运行 1.1~1.3x</td><td>无</td><td>低（现场信息减少）</td><td>低</td></tr>
+<tr><td>8</td><td><a href="#8">覆盖率分级 / <code>-cm_hier</code></a></td><td>运行</td><td>运行 1.05~1.25x</td><td>无</td><td>低（需补覆盖率轮次）</td><td>低</td></tr>
+<tr><td>9</td><td><a href="#9"><code>+notimingcheck</code> / <code>+nospecify</code></a></td><td>运行</td><td>门级 2~5x</td><td>无</td><td><strong>高（漏时序问题）</strong></td><td>极低</td></tr>
+<tr><td>10</td><td><a href="#10"><code>+rad</code> Radiant 优化</a></td><td>编译→运行</td><td>运行 1.3~2x</td><td><strong>需要</strong></td><td>低</td><td>极低</td></tr>
+<tr><td>11</td><td><a href="#10">两态仿真</a></td><td>运行</td><td>运行 1.2~2x</td><td>视版本</td><td><strong>高（掩盖 X 问题）</strong></td><td>低</td></tr>
+<tr><td>12</td><td><a href="#11">TB 代码级优化</a></td><td>运行</td><td>运行 1.2~2x+</td><td>无</td><td>中（可能改激励分布）</td><td><strong>高（需改代码）</strong></td></tr>
+<tr><td>13</td><td><a href="#12">Save / Restore</a></td><td>运行</td><td>SoC 2~5x 墙钟</td><td>无</td><td>中（快照维护）</td><td>中</td></tr>
+<tr><td>14</td><td><a href="#12">Backdoor 加载 / 跳 boot</a></td><td>运行</td><td>SoC 2~10x</td><td>无</td><td><strong>中（跳过的流程不再验证）</strong></td><td>低</td></tr>
+<tr><td>15</td><td><a href="#14"><code>-fgp</code> 细粒度并行</a></td><td>运行（多核）</td><td>门级 2~4x；RTL 1~2x</td><td><strong>需要（按线程）</strong></td><td><strong>中（调度顺序）</strong></td><td>中</td></tr>
+<tr><td>16</td><td><a href="#15"><code>-parallel</code> ALP</a></td><td>运行（多核）</td><td>dump/cov 开销的 0.5~0.9 被隐藏</td><td><strong>需要</strong></td><td>低</td><td>低</td></tr>
+<tr><td>17</td><td><a href="#16">LSF 多机回归</a></td><td>回归吞吐</td><td>近线性（受 license 限）</td><td>sim license</td><td>无</td><td>中</td></tr>
+<tr><td>18</td><td><a href="#16-3">抽象模型替换</a></td><td>运行</td><td>1.5~5x+</td><td>无</td><td><strong>中（需 IP 级补验）</strong></td><td>高</td></tr>
+<tr><td>19</td><td><a href="#16-3">本地盘 I/O / 高主频机型</a></td><td>运行</td><td>1.1~1.3x</td><td>无</td><td>无</td><td>低</td></tr>
+<tr><td>20</td><td><a href="#16-3">硬件加速 emulation</a></td><td>运行</td><td>100~10000x</td><td>专用设备</td><td>低（但调试能力弱）</td><td><strong>极高</strong></td></tr>
+</table>
+<div class="good">
+<p><strong>把表读薄一点</strong>：前 10 项（1 ~ 8，含 4b/4c）全部是「零 license、低风险、低成本」，几乎所有工程都应该先做完这些再谈别的。真正需要花钱的是 10、15、16、20，而它们的前提都是「前面这些已经做完，瓶颈确实在内核或辅助任务上」。</p>
+</div>
+
+<h2 id="18">18. 按瓶颈选型决策树</h2>
+<div class="diagram">                     ┌─ 跑一次 -simprofile time+mem ─┐
+                     └───────────────┬────────────────┘
+                                     ↓
+              ┌──────────────── 瓶颈在哪？ ────────────────┐
+              ↓                      ↓                     ↓
+     【编译时间太长】        【运行时间太长】        【回归总时间太长】
+              ↓                      ↓                     ↓
+   ① 检查是否每次 clean      ① 去掉 debug_access+all    ① case 数多？
+      → 恢复增量编译            → 最立竿见影              → LSF 多机分发
+   ② 加 -j8                  ② 看 profiler 分类：         (吞吐优化)
+   ③ 大设计上 partcomp          · Dump 占比高            ② 单 case 太长？
+   ④ 稳定库走 vlogan 预编译        → 减少/限范围 dump        → 回到「运行太长」
+      (UVM / VIP / cell 库)        → 或 -parallel+dump      (延迟优化)
+   ⑤ C 模型编 .so + -sv_lib      · Coverage 占比高        ③ 有共同长 boot？
+                                   → 分级 / -cm_hier         → Save/Restore
+                                 · Testbench 占比高
+                                   → 降 verbosity
+                                   → TB 代码优化
+                                   → FGP 无效，别浪费
+                                 · Design 内核占比高
+                                   → +rad
+                                   → 门级：+notimingcheck
+                                   → -fgp 多核（做一致性比对）
+                                   → 慢模型换抽象模型</div>
+<table>
+<tr><th>profiler 分类占比</th><th>第一选择</th><th>第二选择</th><th>明确无效的手段</th></tr>
+<tr><td>Dump &gt; 25%</td><td>限范围 / 时间窗 dump（<a href="#6">§6</a>）</td><td><code>-parallel+dump</code>（<a href="#15">§15</a>）</td><td>FGP（dump 仍是瓶颈）</td></tr>
+<tr><td>Coverage &gt; 15%</td><td>功能回归关覆盖率（<a href="#8">§8</a>）</td><td><code>-cm_hier</code> 限范围、toggle 单独跑</td><td>FGP</td></tr>
+<tr><td>Testbench &gt; 30%</td><td>降 verbosity（<a href="#7">§7</a>）</td><td>TB 代码优化（<a href="#11">§11</a>）</td><td><strong>FGP（TB 是串行语义）</strong></td></tr>
+<tr><td>Design 内核 &gt; 50%</td><td><code>+rad</code>（<a href="#10">§10</a>）</td><td><code>-fgp</code>（<a href="#14">§14</a>）</td><td>ALP（辅助任务本来就不多）</td></tr>
+<tr><td>门级 timing check 占比高</td><td>明确这轮验功能还是验时序</td><td>验功能则 <code>+notimingcheck</code>（<a href="#9">§9</a>）</td><td>—</td></tr>
+<tr><td>PLI / DPI 占比高</td><td>降调用频率、减少数据拷贝</td><td>C 侧自身优化</td><td><strong>FGP（线程安全问题）</strong></td></tr>
+<tr><td>各项都不突出但就是慢</td><td>查机型主频、是否 swap、是否 NFS</td><td>Save/Restore 或抽象模型</td><td>—</td></tr>
+</table>
+
+<h2 id="19">19. 分级回归配置模板</h2>
+<p>把上面的选择固化到流程里。核心思想是<strong>不同目的的回归用不同的编译产物和运行选项</strong>，不要用一套配置跑所有事。</p>
+<table>
+<tr><th>轮次</th><th>目的</th><th>编译选项</th><th>运行选项</th><th>覆盖率</th><th>波形</th></tr>
+<tr><td><strong>smoke</strong></td><td>提交门禁，快速发现明显破坏</td><td><code>-j8</code>（增量）</td><td><code>+UVM_VERBOSITY=UVM_LOW</code></td><td>不开</td><td>不 dump</td></tr>
+<tr><td><strong>功能回归</strong></td><td>夜间大规模随机，追 bug</td><td><code>-j8 -debug_access+pp</code></td><td><code>+UVM_VERBOSITY=UVM_LOW</code></td><td>不开</td><td>失败才重跑 dump</td></tr>
+<tr><td><strong>覆盖率回归</strong></td><td>收集覆盖率做签核</td><td><code>-j8 -cm line+cond+fsm+branch -cm_hier cfg</code></td><td><code>-cm ... -cm_name $SEED</code></td><td>开（限范围）</td><td>不 dump</td></tr>
+<tr><td><strong>toggle 轮</strong></td><td>翻转覆盖率（最贵，单独跑）</td><td><code>-cm tgl -cm_hier tgl.cfg</code></td><td><code>-cm tgl</code></td><td>仅 toggle</td><td>不 dump</td></tr>
+<tr><td><strong>门级功能</strong></td><td>验 netlist 连接与功能</td><td><code>+nospecify +delay_mode_zero</code></td><td>—</td><td>不开</td><td>按需</td></tr>
+<tr><td><strong>门级时序</strong></td><td>验 SDF 反标后的时序行为</td><td><code>-sdf max:... +neg_tchk</code>，可加 <code>-fgp</code></td><td><code>-fgp=num_threads:4</code></td><td>不开</td><td>关键窗口</td></tr>
+<tr><td><strong>debug</strong></td><td>复现并调试单个失败 case</td><td><code>-debug_access+all+reverse -kdb -lca</code></td><td>同 seed + 全 dump</td><td>不开</td><td>全 dump</td></tr>
+</table>
+<pre><code># ---- Makefile 模板 ----
+VCS_BASE  = -full64 -sverilog -timescale=1ns/1ps -j8 -ntb_opts uvm-1.2
+LIBS      = -L VIP_LIB -L CELL_LIB          # 预编译库（§4）
+FILELIST  = -f filelist.f -top tb_top
+
+# ---- 一次性：预编译库与 C 模型（由 CI 维护，日常不跑）----
+libs:
+	vlogan -full64 -sverilog -work VIP_LIB  -f vip_filelist.f
+	vlogan -full64 -v2005    -work CELL_LIB -f cell_filelist.f
+
+dpi:
+	gcc -fPIC -shared -O2 -I$(VCS_HOME)/include -o libdpi_model.so dpi_model.c
+
+# ---- 日常：analyze 只过自己的代码 ----
+analyze:
+	vlogan $(VCS_BASE) -f rtl_filelist.f -f tb_filelist.f
+
+# 门禁 / 功能回归用：轻量，可事后看波形
+simv_regr:
+	vcs $(VCS_BASE) $(LIBS) -debug_access+pp -Mdir=csrc_regr $(FILELIST) -o simv_regr
+
+# 覆盖率回归用
+simv_cov:
+	vcs $(VCS_BASE) $(LIBS) -cm line+cond+fsm+branch -cm_hier cm_hier.cfg \
+	    -Mdir=csrc_cov $(FILELIST) -o simv_cov
+
+# 调试用：全开
+simv_dbg:
+	vcs $(VCS_BASE) $(LIBS) -debug_access+all+reverse -kdb -lca \
+	    -Mdir=csrc_dbg $(FILELIST) -o simv_dbg
+
+# 运行目标（-sv_lib 动态加载 C 模型，改 C 不用重编 simv）
+run_regr: simv_regr
+	./simv_regr -sv_lib libdpi_model \
+	            +UVM_TESTNAME=$(TEST) +ntb_random_seed=$(SEED) \
+	            +UVM_VERBOSITY=UVM_LOW -l logs/$(TEST)_$(SEED).log
+
+# 失败复现：同 seed + 全波形
+rerun_dbg: simv_dbg
+	./simv_dbg -sv_lib libdpi_model \
+	           +UVM_TESTNAME=$(TEST) +ntb_random_seed=$(SEED) \
+	           +UVM_VERBOSITY=UVM_HIGH +DUMP_FSDB \
+	           -l logs/$(TEST)_$(SEED)_dbg.log</code></pre>
+<div class="good">
+<p>这个模板有两个关键设计：① <strong>把「跑得快」和「调得动」分到两个可执行文件上</strong>，而不是让所有 case 都背着调试开销跑；② <strong>三个 target 各用独立 <code>-Mdir</code></strong>，否则它们会互相覆盖增量产物，每次切换 target 都退化成全量编译（<a href="#4-7">§4.7</a>）。</p>
+</div>
+
+<h2 id="20">20. 易错点与风险清单</h2>
+<table>
+<tr><th>#</th><th>错误 / 误解</th><th>后果</th><th>正确做法</th></tr>
+<tr><td>1</td><td>没 profiling 就乱加选项</td><td>在无效选项上浪费时间和 license</td><td>先 <code>-simprofile time+mem</code>（<a href="#0-2">§0.2</a>）</td></tr>
+<tr><td>2</td><td>每次 <code>make</code> 都先 <code>clean</code></td><td>增量编译失效，编译慢 5~10x</td><td>clean 与 compile 分离（<a href="#2">§2</a>）</td></tr>
+<tr><td>3</td><td>混淆「编译加速」和「运行加速」</td><td>加了 <code>-j64</code> 却抱怨仿真不变快</td><td><code>-j</code>/partcomp 只管编译（<a href="#13">§13</a>）</td></tr>
+<tr><td>4</td><td>回归也用 <code>-debug_access+all</code></td><td>运行慢 2~3x，且抵消 <code>+rad</code>/FGP 收益</td><td>回归用 <code>+pp</code> 或不加（<a href="#5">§5</a>）</td></tr>
+<tr><td>5</td><td>全程全层次 <code>$fsdbDumpvars(0, tb_top)</code></td><td>dump 成为最大瓶颈，FSDB 几十 GB</td><td>限层次 + 限范围 + 时间窗（<a href="#6">§6</a>）</td></tr>
+<tr><td>6</td><td>热点路径上无保护的 <code>$sformatf</code></td><td>即使不打印也付格式化代价</td><td><code>uvm_report_enabled</code> 先挡（<a href="#7">§7</a>）</td></tr>
+<tr><td>7</td><td>TB 瓶颈的环境上开 FGP</td><td>花了多核 license 却几乎无收益，甚至变慢</td><td>先看 profiler 分类再决定（<a href="#18">§18</a>）</td></tr>
+<tr><td>8</td><td>FGP 上线不做一致性比对</td><td>隐藏的 race 导致结果不一致却没人发现</td><td>单核 vs FGP 比 log / 波形 / 覆盖率（<a href="#14-6">§14.6</a>）</td></tr>
+<tr><td>9</td><td>FGP 线程数拉到 8 / 16</td><td>收益饱和，license 浪费</td><td>扫描找拐点，一般 2~4（<a href="#14-4">§14.4</a>）</td></tr>
+<tr><td>10</td><td>LSF 上开 FGP 不加 <code>span[hosts=1]</code></td><td>线程被分到不同机器，启动失败或性能异常</td><td><code>bsub -n 4 -R "span[hosts=1]"</code>（<a href="#14-3">§14.3</a>）</td></tr>
+<tr><td>11</td><td>签核回归里留着 <code>$assertoff</code> / <code>+notimingcheck</code></td><td><strong>验证能力被阉割，问题漏到硅上</strong></td><td>加速选项与签核配置严格分离（<a href="#19">§19</a>）</td></tr>
+<tr><td>12</td><td>把两态仿真当默认模式</td><td>复位 / 初始化 X 问题被掩盖</td><td>先四态 + xprop 过关，再用两态跑性能回归（<a href="#10-2">§10.2</a>）</td></tr>
+<tr><td>13</td><td>所有 case 都 Save/Restore，不再跑完整 boot</td><td>boot 流程本身的 bug 永远不会被发现</td><td>保留至少一个完整 boot 用例定期跑（<a href="#12">§12</a>）</td></tr>
+<tr><td>14</td><td>把 <code>randomize()</code> 改成 <code>$urandom</code> 没确认分布</td><td>跑得快但验得少，覆盖率悄悄下降</td><td>优化前后比对覆盖率数据库（<a href="#11-3">§11.3</a>）</td></tr>
+<tr><td>15</td><td>log / FSDB 直接写 NFS</td><td>I/O 成为瓶颈，大 log case 慢 20%+</td><td>写本地盘跑完再拷回（<a href="#16-3">§16.3</a>）</td></tr>
+<tr><td>16</td><td><code>-j</code> 与 LSF 申请的核数/内存不匹配</td><td>job 被 kill 或触发 swap 比串行更慢</td><td><code>-j</code> 数与 <code>bsub -n</code> 对齐（<a href="#1-2">§1.2</a>）</td></tr>
+<tr><td>17</td><td>case 数多的回归去优化单 case 延迟</td><td>方向错误，投入产出比极低</td><td>先判断是吞吐问题还是延迟问题（<a href="#16-1">§16.1</a>）</td></tr>
+<tr><td>18</td><td>假设选项名在所有 VCS 版本一致</td><td>选项被忽略（有时只给 warning）却以为生效</td><td><code>vcs -help | grep</code> 确认 + 查本版本 UG；看 log 里是否有选项被忽略的提示</td></tr>
+<tr><td>19</td><td>把 <code>uvm_pkg.sv</code> 加进 filelist 每次重编</td><td>每次编译白送几十秒到两分钟</td><td>用 <code>-ntb_opts uvm-1.2</code> 引用预编译库（<a href="#4-4">§4.4</a>）</td></tr>
+<tr><td>20</td><td>门级编译每次用 <code>-v</code>/<code>-y</code> 扫 cell 库</td><td>cell 库分析占编译时间 30~50%，且天天重复</td><td><code>vlogan -work CELL_LIB</code> 预编译一次（<a href="#4-5">§4.5</a>）</td></tr>
+<tr><td>21</td><td>预编译库与 VCS 版本/选项不匹配</td><td>报错晦涩，或行为诡异难以定位</td><td>库路径带版本号，升级时整体重建（<a href="#4-2">§4.2</a>）</td></tr>
+<tr><td>22</td><td>改了冻结库源码但没重建预编译库</td><td><strong>全组跑的还是旧逻辑，而源码看着是新的</strong></td><td>公共库只读 + git commit stamp 校验（<a href="#4-8">§4.8</a>）</td></tr>
+<tr><td>23</td><td>多个编译配置共用同一个 <code>-Mdir</code></td><td>增量产物互相覆盖，每次切配置都全量重编</td><td>每个 target 独立 <code>-Mdir</code>（<a href="#4-7">§4.7</a>）</td></tr>
+<tr><td>24</td><td>C 模型 <code>.c</code> 直接交给 <code>vcs</code> 静态链接</td><td>改一行 C 就要重 link 整个 simv</td><td>编成 <code>.so</code> 用 <code>-sv_lib</code> 加载（<a href="#4-6">§4.6</a>）</td></tr>
+</table>
+<div class="bad">
+<p><strong>贯穿全文最重要的一条原则</strong>：所有加速手段本质上都是在<strong>「速度」与「验证完整性 / 可调试性」之间做交换</strong>。<code>+notimingcheck</code> 换掉的是时序检查能力，两态换掉的是 X 传播，跳 boot 换掉的是上电流程验证，少 dump 换掉的是失败现场。<strong>每一次交换都必须是有意识的、并且在流程上有补偿安排的</strong>——否则就不是加速，而是偷偷降低了验证质量。</p>
+</div>
+
+<footer>本文整理自一次关于 VCS 仿真加速手段的技术讨论。文中选项名称与行为随 VCS 版本可能存在差异，实施前请以本地 <code>vcs -help</code> 与对应版本 User Guide 为准；所有性能倍数均为量级参考，必须在自身工程上实测。</footer>
+</div>
+<script>
+(function(){
+  var nav    = document.getElementById('nav');
+  var toggle = document.getElementById('nav-toggle');
+  var links  = [].slice.call(nav.querySelectorAll('a'));
+  var targets = links.map(function(a){
+    return document.getElementById(decodeURIComponent(a.hash.slice(1)));
+  });
+  toggle.addEventListener('click', function(){ nav.classList.toggle('open'); });
+  nav.addEventListener('click', function(e){
+    if (e.target.tagName === 'A') nav.classList.remove('open');
+  });
+  function highlight(){
+    var i, cur = 0;
+    for (i = 0; i < targets.length; i++) {
+      if (targets[i] && targets[i].getBoundingClientRect().top <= 80) cur = i;
+    }
+    if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 4)
+      cur = targets.length - 1;
+    for (i = 0; i < links.length; i++) links[i].classList.toggle('active', i === cur);
+    var act = links[cur];
+    if (act.offsetTop < nav.scrollTop ||
+        act.offsetTop + act.offsetHeight > nav.scrollTop + nav.clientHeight) {
+      nav.scrollTop = act.offsetTop - nav.clientHeight / 2;
+    }
+  }
+  var pending = false;
+  window.addEventListener('scroll', function(){
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function(){ pending = false; highlight(); });
+  });
+  window.addEventListener('resize', highlight);
+  highlight();
+})();
+</script>
+</body>
+</html>
