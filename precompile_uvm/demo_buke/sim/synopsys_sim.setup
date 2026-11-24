@@ -1,0 +1,6 @@
+-- synopsys_sim.setup
+WORK > DEFAULT
+DEFAULT : ./work
+
+-- 预编译 UVM 库的映射
+UVM_LIB : ./uvm_precompiled_lib1
