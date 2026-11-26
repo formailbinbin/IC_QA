@@ -163,7 +163,7 @@ body.has-nav .wrap{margin-left:264px}
             <li><a class="n risk" href="#14-6">调度顺序差异<span class="tag">必须一致性比对</span></a></li>
           </ul>
         </li>
-        <li><a class="n hot" href="#15">ALP 应用级并行<span class="tag">dump / cov 卸载</span></a></li>
+        <li><a class="n" href="#15">ALP（历史功能）<span class="tag">需核验版本</span></a></li>
         <li><a class="n" href="#16">LSF 多机回归<span class="tag">吞吐最优</span></a></li>
       </ul>
     </li>
@@ -856,7 +856,7 @@ end</code></pre>
 <div class="part" id="P3">
 <div class="pn">第 三 部 分</div>
 <h2>多核加速</h2>
-<p class="pd">前两部分都是「少做无用功」，这一部分是「同样的工作用更多核去做」。核心是分清三类并行：编译并行（<code>-j</code>）、应用级并行（ALP，卸载 dump/覆盖率）、细粒度并行（FGP，切分仿真内核本身）。三者作用层次完全不同，收益条件也完全不同。</p>
+<p class="pd">前两部分都是「少做无用功」，这一部分是「同样的工作用更多核去做」。核心是分清编译并行（<code>-j</code>）、细粒度并行（FGP，切分仿真内核本身）及多机回归。历史上 VCS 还提供过应用级并行（ALP）；其旧式 <code>-parallel+...</code> 语法并非所有版本支持，本文单列说明，不能默认套用。</p>
 </div>
 
 <h2 id="13">13. 三类并行的区别</h2>
@@ -868,17 +868,17 @@ end</code></pre>
    并行 gcc / 并行 elaborate           │   │        ↑ FGP 切这里             │
    【只缩短 compile 时间】             │   │                                │
                                        │   │   波形 dump / 覆盖率 / SVA     │
-                                       │   │        ↑ ALP 卸载这些          │
+                                       │   │        ↑ 历史 ALP（需核验）    │
                                        └───┴────────────────────────────────┘</div>
 <table>
 <tr><th>类别</th><th>选项</th><th>并行什么</th><th>加速对象</th><th>语义风险</th><th>license</th></tr>
 <tr><td>编译并行</td><td><code>-j</code>、<code>-fastpartcomp</code></td><td>gcc 进程 / elaboration 分区</td><td>只有编译时间</td><td>无</td><td>不需要</td></tr>
-<tr><td>应用级并行 ALP</td><td><code>-parallel+...</code></td><td>dump / coverage / SVA 等辅助任务</td><td>运行时间（辅助任务占比高时）</td><td>低（不改内核调度）</td><td>需要多核 license</td></tr>
+<tr><td>应用级并行 ALP（历史功能）</td><td><code>-parallel+...</code></td><td>dump / coverage / SVA 等辅助任务</td><td>旧版本的运行时间优化</td><td>低（不改内核调度）</td><td>版本及 license 相关；<strong>R-2020.12-SP2 不支持</strong></td></tr>
 <tr><td>细粒度并行 FGP</td><td><code>-fgp</code></td><td>仿真内核的事件求值</td><td>运行时间（设计事件密集时）</td><td><strong>中（调度顺序可能变）</strong></td><td>需要多核 license</td></tr>
 <tr><td>多机回归</td><td>LSF / SGE</td><td>整个回归的 case 分发</td><td>回归总墙钟（吞吐）</td><td>无</td><td>只需足够 sim license</td></tr>
 </table>
-<div class="note">
-<p><strong>前三类正交，可以同时用</strong>：<code>vcs -j8 -fgp ... -parallel+dump</code> 是合法组合。但注意 FGP 和 ALP 都会消耗多核 license，同时开要算清总线程数与 license 数是否够。</p>
+<div class="warn">
+<p><strong>版本边界：</strong>历史 VCS 版本中的 ALP 与 <code>-j</code> / FGP 可以组合；但不能据此推断当前版本也支持。以本文实际核验的 <strong>VCS R-2020.12-SP2</strong> 为例，<code>-parallel</code> 已被标为 obsolete，<code>-parallel+assert</code> 会直接编译报错；该版本只应使用 <code>-j</code>、<code>-fastpartcomp</code>，以及在本地手册和 license 明确支持时使用 FGP。</p>
 </div>
 
 <h2 id="14">14. FGP 细粒度并行</h2>
@@ -988,47 +988,39 @@ urg -dir base_cov.vdb fgp_cov.vdb -report cmp_rpt
 <tr><td>门级 / 大规模 RTL 上常得 2~4x</td><td>小设计、TB 主导场景几乎无效甚至变慢</td></tr>
 <tr><td>不需要改设计代码，加选项即可</td><td><strong>事件调度顺序可能变化</strong>，必须做一致性比对</td></tr>
 <tr><td>对「单个超长 case 卡住整个回归」的问题是唯一解</td><td>线程必须同机（<code>span[hosts=1]</code>），对集群调度有要求</td></tr>
-<tr><td>可与 <code>+rad</code>、ALP、增量编译叠加</td><td>与部分 PLI / debug 选项不兼容；内存占用随线程增加</td></tr>
+<tr><td>可与 <code>+rad</code>、增量编译叠加；若使用历史 ALP，须先确认版本支持</td><td>与部分 PLI / debug 选项不兼容；内存占用随线程增加</td></tr>
 </table>
 
-<h2 id="15">15. ALP 应用级并行</h2>
-<h3 id="15-1">15.1 原理</h3>
-<p>ALP（Application Level Parallelism）不动仿真内核，而是把<strong>内核之外的辅助工作</strong>搬到独立线程：波形写盘、toggle 覆盖率累加、SVA 评估等。仿真内核把数据丢进队列就继续往前跑，辅助线程异步消费。</p>
-<div class="diagram">单线程：  内核求值 → 写 FSDB → 内核求值 → 写 FSDB → ...
-                     ↑ 内核在这里被阻塞
+<h2 id="15">15. ALP 应用级并行：历史功能与版本核验</h2>
+<h3 id="15-1">15.1 ALP 是什么</h3>
+<p>ALP（Application Level Parallelism）是 VCS <strong>历史版本</strong>提供的多核机制：不改变仿真内核事件调度，而是将 testbench、断言、覆盖率、debug 等验证应用工作分配到多个核。该概念曾由 Synopsys 对外发布，但具体命令、可并行对象和许可证条件均随发行版本变化。</p>
+<div class="diagram">历史 ALP 概念：仿真内核 ─→ 验证应用（TB / SVA / coverage / debug）
+                                      └─ 在多个核上并发执行
 
-ALP：     内核求值 → 内核求值 → 内核求值 → ...    （主线程不停）
-              ↓ 入队    ↓ 入队    ↓ 入队
-          [ dump 线程 ] 异步写盘                  （另一个核）</div>
-<h3 id="15-2">15.2 操作 Demo</h3>
-<pre><code># dump 卸载到独立线程（最常用，对开 FSDB 的回归收益明显）
-vcs -full64 -sverilog -j8 -debug_access+pp \
-    -parallel+dump \
-    -f filelist.f -top tb_top -o simv_alp
-
-# 覆盖率收集并行
+注意：这是机制说明，不表示任意 VCS 版本均有相同命令或均支持该功能。</div>
+<h3 id="15-2">15.2 本文已核验版本：R-2020.12-SP2 不支持</h3>
+<div class="bad">
+<p>本机实际编译日志已确认：<strong>VCS R-2020.12-SP2 中 <code>-parallel</code> 已废弃</strong>。加入 <code>-parallel+assert</code> 会报 <code>Error-[OBSOLETE_OPTION]</code> 并使编译失败。因此以下旧示例均<strong>不能</strong>用于该版本：<code>-parallel+assert</code>、<code>-parallel+dump</code>、<code>-parallel+coverage</code>。</p>
+</div>
+<pre><code># R-2020.12-SP2：不要使用（会编译报 obsolete）
+vcs ... -parallel+assert
+vcs ... -parallel+dump
 vcs ... -parallel+coverage
 
-# 组合使用
-vcs ... -parallel+dump+coverage
-
-# 与 FGP 叠加（注意总线程数与 license）
-vcs ... -fgp -parallel+dump -o simv_both
-./simv_both -fgp=num_threads:4 ...</code></pre>
-<div class="warn">
-<p><code>-parallel</code> 的子选项名称与支持范围<strong>各版本差异较大</strong>（部分版本写作 <code>-parallel=dump</code> 或需配合 <code>+fsdb+parallel</code>）。务必用本地版本确认：</p>
-<pre><code>vcs -help | grep -i parallel</code></pre>
-</div>
-<h3 id="15-3">15.3 优缺点</h3>
+# 此版本可用的编译并行 / 分区编译
+vcs ... -j8 -fastpartcomp=j4 -Mupdate -o simv</code></pre>
+<p>该版本的错误提示仅给出一项替换：<code>-parallel+profile</code> 改为 <code>-profiler</code>；但 <code>-profiler</code> 只用于定位性能瓶颈，<strong>不提供 ALP 加速</strong>。</p>
+<h3 id="15-3">15.3 其他版本如何核验</h3>
+<p>不能由版本号推断 ALP 可用性。只有本地帮助或 User Guide 明确列出相应子项，才可以使用；同时还须确认所需 license。先执行：</p>
+<pre><code>vcs -help | grep -i -A 8 -B 3 parallel
+# 再查本机对应版本 User Guide 的 Multicore / ALP 章节</code></pre>
 <table>
-<tr><th>优点</th><th>缺点 / 代价</th></tr>
-<tr><td>风险比 FGP 低得多：<strong>不改变内核事件调度，结果严格一致</strong></td><td>加速上限受限：最多只能把辅助任务的时间「隐藏掉」</td></tr>
-<tr><td>正好治「因为开了 FSDB / 覆盖率而变慢」这个最常见问题</td><td>如果本来就不 dump 不开覆盖率，完全无收益</td></tr>
-<tr><td>对 TB 主导的 UVM 环境也有效（dump 开销与设计规模无关）</td><td>仍需多核 license</td></tr>
-<tr><td>配置简单，无需一致性比对</td><td>辅助线程队列积压时仍会反压主线程（I/O 慢盘场景）</td></tr>
+<tr><th>核验结果</th><th>动作</th></tr>
+<tr><td>明确列出 <code>-parallel+&lt;子项&gt;</code></td><td>按该版本手册配置，先以固定 seed 做功能一致性和性能对比</td></tr>
+<tr><td>提示 obsolete，或帮助中未列出</td><td>不要使用；改用减少 dump / 覆盖率范围、<code>-j</code> / <code>-fastpartcomp</code>、FGP（若手册支持）或 LSF case 级并发</td></tr>
 </table>
 <div class="good">
-<p><strong>选择次序建议</strong>：先问「能不能干脆不 dump / 不开覆盖率」（<a href="#6">§6</a>、<a href="#8">§8</a>，零成本）→ 不行再用 ALP 把它并行掉（低风险）→ 内核本身才是瓶颈时才上 FGP（高成本高风险）。</p>
+<p><strong>R-2020.12-SP2 的实际选择顺序：</strong>先不 dump / 限 dump 范围、分级跑覆盖率（<a href="#6">§6</a>、<a href="#8">§8</a>）→ 编译用 <code>-j</code>、<code>-fastpartcomp</code>、<code>-Mupdate</code> → 单 case 的内核瓶颈才评估 FGP → 多 case 回归由 LSF 并发。不要把历史 ALP 当作当前版本的可执行配置。</p>
 </div>
 
 <h2 id="16">16. SmartCompile 与多机回归</h2>
@@ -1097,7 +1089,7 @@ urg -full64 -dir ./cov_db/*.vdb -dbname merged.vdb -report urgReport</code></pre
 <tr><td>13</td><td><a href="#12">Save / Restore</a></td><td>运行</td><td>SoC 2~5x 墙钟</td><td>无</td><td>中（快照维护）</td><td>中</td></tr>
 <tr><td>14</td><td><a href="#12">Backdoor 加载 / 跳 boot</a></td><td>运行</td><td>SoC 2~10x</td><td>无</td><td><strong>中（跳过的流程不再验证）</strong></td><td>低</td></tr>
 <tr><td>15</td><td><a href="#14"><code>-fgp</code> 细粒度并行</a></td><td>运行（多核）</td><td>门级 2~4x；RTL 1~2x</td><td><strong>需要（按线程）</strong></td><td><strong>中（调度顺序）</strong></td><td>中</td></tr>
-<tr><td>16</td><td><a href="#15"><code>-parallel</code> ALP</a></td><td>运行（多核）</td><td>dump/cov 开销的 0.5~0.9 被隐藏</td><td><strong>需要</strong></td><td>低</td><td>低</td></tr>
+<tr><td>16</td><td><a href="#15">ALP（历史功能）</a></td><td>运行（多核）</td><td>仅旧版且手册明确支持时评估</td><td>版本 / license 相关</td><td>低</td><td>低；<strong>R-2020.12-SP2 不可用</strong></td></tr>
 <tr><td>17</td><td><a href="#16">LSF 多机回归</a></td><td>回归吞吐</td><td>近线性（受 license 限）</td><td>sim license</td><td>无</td><td>中</td></tr>
 <tr><td>18</td><td><a href="#16-3">抽象模型替换</a></td><td>运行</td><td>1.5~5x+</td><td>无</td><td><strong>中（需 IP 级补验）</strong></td><td>高</td></tr>
 <tr><td>19</td><td><a href="#16-3">本地盘 I/O / 高主频机型</a></td><td>运行</td><td>1.1~1.3x</td><td>无</td><td>无</td><td>低</td></tr>
@@ -1120,7 +1112,7 @@ urg -full64 -dir ./cov_db/*.vdb -dbname merged.vdb -report urgReport</code></pre
    ② 加 -j8                  ② 看 profiler 分类：         (吞吐优化)
    ③ 大设计上 partcomp          · Dump 占比高            ② 单 case 太长？
    ④ 稳定库走 vlogan 预编译        → 减少/限范围 dump        → 回到「运行太长」
-      (UVM / VIP / cell 库)        → 或 -parallel+dump      (延迟优化)
+      (UVM / VIP / cell 库)        → 限范围 / 时间窗 dump
    ⑤ C 模型编 .so + -sv_lib      · Coverage 占比高        ③ 有共同长 boot？
                                    → 分级 / -cm_hier         → Save/Restore
                                  · Testbench 占比高
@@ -1134,10 +1126,10 @@ urg -full64 -dir ./cov_db/*.vdb -dbname merged.vdb -report urgReport</code></pre
                                    → 慢模型换抽象模型</div>
 <table>
 <tr><th>profiler 分类占比</th><th>第一选择</th><th>第二选择</th><th>明确无效的手段</th></tr>
-<tr><td>Dump &gt; 25%</td><td>限范围 / 时间窗 dump（<a href="#6">§6</a>）</td><td><code>-parallel+dump</code>（<a href="#15">§15</a>）</td><td>FGP（dump 仍是瓶颈）</td></tr>
+<tr><td>Dump &gt; 25%</td><td>限范围 / 时间窗 dump（<a href="#6">§6</a>）</td><td>失败 case 再重跑 dump；使用本地盘</td><td>FGP（dump 仍是瓶颈）</td></tr>
 <tr><td>Coverage &gt; 15%</td><td>功能回归关覆盖率（<a href="#8">§8</a>）</td><td><code>-cm_hier</code> 限范围、toggle 单独跑</td><td>FGP</td></tr>
 <tr><td>Testbench &gt; 30%</td><td>降 verbosity（<a href="#7">§7</a>）</td><td>TB 代码优化（<a href="#11">§11</a>）</td><td><strong>FGP（TB 是串行语义）</strong></td></tr>
-<tr><td>Design 内核 &gt; 50%</td><td><code>+rad</code>（<a href="#10">§10</a>）</td><td><code>-fgp</code>（<a href="#14">§14</a>）</td><td>ALP（辅助任务本来就不多）</td></tr>
+<tr><td>Design 内核 &gt; 50%</td><td><code>+rad</code>（<a href="#10">§10</a>）</td><td><code>-fgp</code>（<a href="#14">§14</a>）</td><td>只优化 dump / 覆盖率的历史 ALP</td></tr>
 <tr><td>门级 timing check 占比高</td><td>明确这轮验功能还是验时序</td><td>验功能则 <code>+notimingcheck</code>（<a href="#9">§9</a>）</td><td>—</td></tr>
 <tr><td>PLI / DPI 占比高</td><td>降调用频率、减少数据拷贝</td><td>C 侧自身优化</td><td><strong>FGP（线程安全问题）</strong></td></tr>
 <tr><td>各项都不突出但就是慢</td><td>查机型主频、是否 swap、是否 NFS</td><td>Save/Restore 或抽象模型</td><td>—</td></tr>
